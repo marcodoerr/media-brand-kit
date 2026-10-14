@@ -1,0 +1,1057 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Media Brand Kit</title>
+<meta name="apple-mobile-web-app-title" content="Media Brand Kit">
+<meta name="application-name" content="Media Brand Kit">
+<meta name="description" content="Build branded backdrops for reels, portrait posts and desktop — then export them as PNG.">
+<meta name="theme-color" content="#2a0129">
+<link rel="icon" href="assets/favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>
+  /* Theme the studio in the saved brand before first paint (no color flash).
+     app.js sets it again, and keeps it in step when the brand changes. */
+  try {
+    var b = JSON.parse(localStorage.getItem('askruth.backdrop-studio.v2') || '{}').brand;
+    if (b) document.documentElement.dataset.brand = b;
+  } catch (e) {}
+  /* …and the browser's own color (tab bar, address bar, the area past the page's
+     edges) is the brand's studio background from the start, not Ask Ruth's purple. */
+  try {
+    var bg = getComputedStyle(document.documentElement).getPropertyValue('--ui-bg').trim();
+    if (bg) document.querySelector('meta[name="theme-color"]').content = bg;
+  } catch (e) {}
+</script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <!-- the menu: your projects (recent, saved, new) and, on a phone, the view settings -->
+    <button class="burger" id="burger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="burger-menu" aria-label="Menu — projects and view" title="Projects">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <!-- v3.1: the whole brand area — mark, label, name, caret — opens the brand switcher
+         (an invisible native select over it: keyboard, touch and the system list for free) -->
+    <span class="brand-switch brand-area" title="Switch brand">
+      <span class="brand-mark" id="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text" aria-hidden="true">
+        <span class="brand-kicker">Brand</span>
+        <span class="format-pill brand-pill"><span id="tb-brand-label"></span></span>
+      </span>
+      <select id="brand-select" class="brand-select tab-select" aria-label="Brand — switch to another brand"></select>
+    </span>
+    <!-- the project's format: a setting made once, so it sits with the brand, not with the section buttons -->
+    <span class="brand-switch topbar-format">
+      <span class="brand-kicker" aria-hidden="true">Format</span>
+      <span class="format-pill" aria-hidden="true"><span id="tb-format-label">Video · 9:16</span></span>
+      <select id="tab-format-select" class="tab-select" aria-label="Format"></select>
+    </span>
+  </div>
+  <div class="topbar-actions">
+    <!-- v3.21 · a new project in the brand that is open (desktop; a phone has it under +) -->
+    <button class="save-heart new-proj" id="btn-new-proj" type="button" aria-label="New project" title="New project in this brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13.5 3.5V9H19"/><path d="M12 12v6M9 15h6"/></svg></button>
+    <!-- v3.2 · save the open project under a name -->
+    <button class="save-heart" id="btn-save-proj" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="save-pop" aria-label="Save project" title="Save project"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.2s-7.6-4.6-7.6-10.1A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.6 2.7c0 5.5-7.6 10.1-7.6 10.1z"/></svg></button>
+    <button class="btn btn-primary" id="btn-export" type="button" aria-label="Export" title="Export"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4.5"/></svg><span class="btn-label">Export</span></button>
+  </div>
+</header>
+
+<!-- v3.1 · Draw mode: a small bar while drawing — tools, colour, line, undo, Done -->
+<div class="draw-bar" id="draw-bar" role="toolbar" aria-label="Drawing" hidden>
+  <div class="draw-tools" role="radiogroup" aria-label="Tool">
+    <button type="button" class="icon-chip" role="radio" data-tool="pen" aria-label="Pen" title="Pen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20c3-1 4.5-2.5 6-4.5L18.5 7a2.1 2.1 0 0 0-3-3L7 12.5C5 14 4 16.5 4 20z"/></svg></button>
+    <button type="button" class="icon-chip" role="radio" data-tool="hl" aria-label="Highlighter" title="Highlighter"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 15l-4 5h6l2-2"/><path d="M9 15l7.5-10.5 3.5 3.5L13 18z"/></svg></button>
+    <button type="button" class="icon-chip" role="radio" data-tool="line" aria-label="Line" title="Line"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5"/></svg></button>
+    <button type="button" class="icon-chip" role="radio" data-tool="arrow" aria-label="Arrow" title="Arrow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19 19 5M10 5h9v9"/></svg></button>
+    <button type="button" class="icon-chip" role="radio" data-tool="ellipse" aria-label="Circle" title="Circle"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="8" ry="6.5"/></svg></button>
+  </div>
+  <span class="draw-sep" aria-hidden="true"></span>
+  <div class="swatches draw-swatches" id="draw-bar-colours" role="radiogroup" aria-label="Color"></div>
+  <span class="draw-sep" aria-hidden="true"></span>
+  <div class="draw-widths" role="radiogroup" aria-label="Line">
+    <button type="button" class="icon-chip" role="radio" data-w="6" aria-label="Thin line" title="Thin"><i style="--d:4px"></i></button>
+    <button type="button" class="icon-chip" role="radio" data-w="12" aria-label="Medium line" title="Medium"><i style="--d:8px"></i></button>
+    <button type="button" class="icon-chip" role="radio" data-w="22" aria-label="Thick line" title="Thick"><i style="--d:13px"></i></button>
+  </div>
+  <span class="draw-sep" aria-hidden="true"></span>
+  <button type="button" class="icon-chip" id="draw-undo" aria-label="Undo last stroke" title="Undo last stroke"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12h-2" transform="translate(0 -6)"/></svg></button>
+  <button type="button" class="btn btn-primary draw-done" id="draw-done">Done</button>
+</div>
+<div class="burger-scrim" id="burger-scrim" hidden></div>
+<div class="burger-menu" id="burger-menu" role="dialog" aria-label="Menu" hidden></div>
+<main class="shell">
+
+  <!-- ── stage ────────────────────────────────────────────────────────── -->
+  <section class="stage" aria-label="Preview">
+    <div class="stage-inner">
+      <!-- v3.1 · desktop: hide the editing panel for more canvas (selecting something still opens its controls) -->
+      <button class="surface-toggle panel-toggle" id="panel-toggle" type="button" aria-pressed="false"
+              aria-label="Hide the panel" title="Hide the panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14.5 4.5v15" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16.8 9.5h1.4M16.8 12h1.4M16.8 14.5h1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <!-- full-screen edit: the canvas large, the same state and controls -->
+      <button class="surface-toggle fs-open" id="fs-open" type="button"
+              aria-label="Full-screen edit" title="Full-screen edit">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <!-- what the preview sits on: the dark studio or a white screen — a
+           viewing aid only, never exported -->
+      <button class="surface-toggle" id="surface-toggle" type="button" aria-pressed="false"
+              aria-label="Preview on a light background" title="Preview on a light background">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg>
+      </button>
+      <div class="fs-bar" id="fs-bar" hidden>
+        <div class="fs-nav">
+          <button class="fs-btn" id="fs-prev" type="button" aria-label="Previous section"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>
+          <span class="fs-scope edit-scope" id="fs-scope"><i class="cat-dot" aria-hidden="true"></i><span class="fs-scope-name" id="fs-scope-name">Hook</span><span class="fs-count" id="fs-count"></span></span>
+          <button class="fs-btn" id="fs-next" type="button" aria-label="Next section"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg></button>
+          <button class="fs-btn fs-pill fs-add-section" id="fs-add-section" type="button" aria-haspopup="menu" aria-label="Add" title="Add text, a button, media, a badge, a section — or change the background"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span></button>
+        </div>
+        <p class="fs-hint" id="fs-hint">Tap an item to edit it · + to add</p>
+        <div class="fs-actions">
+          <button class="fs-btn fs-play" id="fs-play" type="button" aria-label="Play" hidden>
+            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+          </button>
+          <!-- desktop: the view settings (safe area, grid) with the full-screen control -->
+          <button class="fs-btn fs-desk" id="fs-view" type="button" aria-haspopup="menu" aria-label="View: safe area, grid, full screen" title="View">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 12h16M12 4v16" opacity=".55"/></svg></button>
+          <button class="fs-btn fs-pill" id="fs-preview" type="button" aria-pressed="false">
+            <svg class="i-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="i-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5a2 2 0 0 1 3 3L9 18l-4 1z"/></svg>
+            <span id="fs-preview-label">Preview</span>
+          </button>
+          <!-- phone only: the light/dark preview background, and More (Guides, saved designs) -->
+          <button class="fs-btn fs-phone" id="fs-surface" type="button" aria-label="Preview on a light background" title="Light / dark preview background">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor"/></svg></button>
+          <button class="fs-btn fs-phone" id="fs-more" type="button" aria-label="More: guides and saved designs" title="Guides and saved designs">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18.5" cy="12" r="1.6" fill="currentColor"/></svg></button>
+          <button class="fs-btn fs-pill fs-export" id="fs-export" type="button">Export</button>
+          <button class="fs-btn" id="fs-close" type="button" aria-label="Exit full screen" title="Exit full screen (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+      </div>
+      <div class="canvas-wrap" id="canvas-wrap">
+        <canvas id="preview" width="1080" height="1920" aria-label="Backdrop preview"></canvas>
+      </div>
+      <p class="stage-hint" id="stage-hint">Drag to move · tap to edit</p>
+      <!-- the timeline: screens (Hook → Value… → CTA) on a time ruler, a sound track, a playhead -->
+      <div class="timeline" id="timeline">
+        <div class="tl-head">
+          <button class="tl-play" id="tl-play" type="button" aria-label="Play">
+            <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+            <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+          </button>
+          <span class="tl-time" id="tl-time">0:00.0 / 0:09.0</span>
+          <span class="tl-spacer"></span>
+          <!-- extensions only: a phone then opens its files, not the camera / photo sheet -->
+          <input type="file" id="music-input" accept=".mp3,.m4a,.aac,.wav,.ogg,.oga,.flac,.opus" hidden>
+          <input type="file" id="music-video-input" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" hidden>
+          <!-- what this project is: a video, or a carousel of images — asked once, used through export -->
+        </div>
+        <div class="tl-scroll" id="tl-scroll">
+          <div class="tl-inner" id="tl-inner">
+            <div class="tl-ruler" id="tl-ruler" aria-hidden="true"></div>
+            <div class="scenes" id="scenes" role="list" aria-label="Screens"></div>
+            <div class="tl-overlay" id="tl-overlay" aria-label="Overlay clips"></div>
+            <div class="tl-audio" id="tl-audio"></div>
+            <div class="tl-playhead" id="tl-playhead" aria-hidden="true"></div>
+          </div>
+        </div>
+      </div>
+      <!-- the selected screen: what it is, its CTA style and how long it shows -->
+      <div class="scene-bar" id="scene-bar"></div>
+      <!-- the sound: volume, fit the timeline to it, fade out -->
+      <div class="scene-bar music-bar" id="music-bar" hidden></div>
+    </div>
+  </section>
+
+  <!-- ── controls: format → background → content → supporting ─────────── -->
+  <section class="panel panel-controls" aria-label="Controls">
+
+    <!-- section buttons: each opens its section — inline under the buttons on a
+         wide screen, in a sheet under the preview on a phone. Same controls, same state. -->
+    <!-- + adds something new; selecting on the preview edits it (the tabs are gone) -->
+    <div class="panel-top" id="panel-top">
+      <button class="add-btn" id="add-btn" type="button" aria-haspopup="menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span>
+      </button>
+      <span class="panel-top-title" id="panel-top-title"></span>
+      <button class="panel-done" id="panel-done" type="button" hidden>Done</button>
+    </div>
+    <nav class="edit-tabs" id="edit-tabs" aria-label="Sections" hidden>
+      <button type="button" aria-expanded="false" data-tab="background"><span class="tab-name">Background</span><span class="tab-val" aria-hidden="true"></span></button>
+      <button type="button" aria-expanded="false" data-tab="text"><span class="tab-name">Text</span><span class="tab-val" aria-hidden="true"></span></button>
+      <button type="button" aria-expanded="false" data-tab="buttons"><span class="tab-name">Buttons</span><span class="tab-val" aria-hidden="true"></span></button>
+      <button type="button" aria-expanded="false" data-tab="card"><span class="tab-name">Media</span><span class="tab-val" aria-hidden="true"></span></button>
+      <button type="button" aria-expanded="false" data-tab="badge"><span class="tab-name">Badge</span><span class="tab-val" aria-hidden="true"></span></button>
+    </nav>
+
+    <!-- the open section: the same groups, moved in while it is open (a sheet on a phone) -->
+    <div class="section-sheet" id="section-sheet" role="dialog" aria-modal="false" aria-label="Edit" hidden>
+      <div class="section-sheet-head" id="section-sheet-head">
+        <span class="section-sheet-handle" aria-hidden="true"></span>
+        <button class="fs-sheet-close" id="fs-sheet-close" type="button" aria-label="Close">×</button>
+        <!-- v3.21 · phone: Done in the sheet's top-right corner, always in view (the body scrolls under it) -->
+        <button class="section-sheet-done" id="section-sheet-done" type="button">Done</button>
+      </div>
+      <div class="section-sheet-body" id="section-sheet-body"></div>
+    </div>
+
+    <!-- 1 · Format -->
+    <div class="group" id="group-format" data-tabs="format">
+      <div class="group-head"><h2 class="group-title"><label for="format-select">Format</label></h2></div>
+      <div class="format-select">
+        <i class="format-ratio" id="format-ratio" aria-hidden="true"></i>
+        <select id="format-select" aria-label="Canvas format"></select>
+      </div>
+    </div>
+
+    <!-- 2 · Background -->
+    <div class="group" id="group-background" data-tabs="background">
+      <div class="group-head">
+        <h2 class="group-title">Background</h2>
+      </div>
+      <!-- Tone down: every background — patterns, artwork, colours, uploads, video — always here, first -->
+      <div class="sub tone-down" id="wash-controls">
+        <div class="segments" id="seg-overlay" role="radiogroup" aria-label="Tone down the background" hidden></div>
+        <label class="slider-row">
+          <span>Tone down</span>
+          <input type="range" id="ov-strength" min="0" max="1" step="0.02" value="0.3" aria-label="Tone down the background">
+          <output id="ov-strength-out">30%</output>
+        </label>
+      </div>
+      <!-- v3.1 · what kind of background: the choices and the controls below follow it -->
+      <div class="segments bg-kinds" id="bg-kinds" role="tablist" aria-label="Background type">
+        <button type="button" role="tab" data-k="colour" aria-selected="false">Color</button>
+        <button type="button" role="tab" data-k="pattern" aria-selected="false">Pattern</button>
+        <button type="button" role="tab" data-k="image" aria-selected="false">Image</button>
+        <button type="button" role="tab" data-k="cogent" aria-selected="false">Cogents</button>
+      </div>
+      <!-- the gallery: on a phone it moves under the current background's settings -->
+      <div class="bg-gallery" id="bg-gallery">
+      <span class="lbl lbl-sub bg-change-head" id="bg-change-head">Change background</span>
+      <p class="micro brand-note" id="brand-note" hidden></p>
+
+      <div class="thumbs" id="thumbs" role="radiogroup" aria-label="Backdrop"></div>
+      <button class="show-all" id="bg-show-all" type="button" hidden>Show all</button>
+      <!-- brand colours — a plain background instead of a pattern -->
+      <div class="colour-row" id="bg-colours" role="radiogroup" aria-label="Background color">
+        <span class="colour-lbl">Color</span><span class="swatches"></span>
+      </div>
+      <!-- v3.1 · a brand-safe gradient: the colour above, a second brand colour, one of four directions -->
+      <div class="grad" id="grad-controls">
+        <label class="switch switch-row">
+          <input type="checkbox" id="tg-grad">
+          <span class="track" aria-hidden="true"></span>
+          <span>Gradient</span>
+        </label>
+        <div class="grad-body" id="grad-body" hidden>
+          <div class="colour-row" id="grad-to" role="radiogroup" aria-label="Gradient: second color">
+            <span class="colour-lbl">To</span><span class="swatches"></span>
+          </div>
+          <div class="grad-dirs" role="radiogroup" aria-label="Gradient direction">
+            <span class="colour-lbl">Direction</span>
+            <span class="grad-dir-set" id="grad-dirs">
+              <button type="button" class="icon-chip" role="radio" data-dir="s" aria-label="Top to bottom" title="Top to bottom"><svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(0deg)"><path d="M12 4v16M6 14l6 6 6-6"/></svg></button>
+              <button type="button" class="icon-chip" role="radio" data-dir="se" aria-label="Diagonal, down" title="Diagonal, down"><svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(-45deg)"><path d="M12 4v16M6 14l6 6 6-6"/></svg></button>
+              <button type="button" class="icon-chip" role="radio" data-dir="e" aria-label="Left to right" title="Left to right"><svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(-90deg)"><path d="M12 4v16M6 14l6 6 6-6"/></svg></button>
+              <button type="button" class="icon-chip" role="radio" data-dir="ne" aria-label="Diagonal, up" title="Diagonal, up"><svg viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(-135deg)"><path d="M12 4v16M6 14l6 6 6-6"/></svg></button>
+              <button type="button" class="icon-chip grad-swap" id="grad-swap" aria-label="Swap the two colors" title="Swap colors"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v14M3.5 14.5 7 18l3.5-3.5M17 20V6M13.5 9.5 17 6l3.5 3.5"/></svg></button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="upload-row">
+        <button class="upload-tile upload-tile-sm" id="btn-upload" type="button">
+          <span class="upload-plus" aria-hidden="true">+</span>
+          <span>Upload<small>Image or video</small></span>
+        </button>
+        <button class="upload-tile upload-tile-sm record-tile" type="button" data-camera="background">
+          <span class="upload-plus" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="12.5" height="11" rx="2.5"/><path d="M15.5 10.5 21 7.5v9l-5.5-3z"/></svg></span><span>Record</span>
+        </button>
+      </div>
+      <input type="file" id="file-input" accept="image/*,video/*" multiple hidden>
+      <p class="storage-note" id="storage-note" hidden></p>
+      <p class="upload-error" id="upload-error" hidden></p>
+      </div>
+
+      <!-- pattern backdrops -->
+      <div class="sub" id="tile-controls" hidden>
+        <label class="slider-row">
+          <span>Size</span>
+          <input type="range" id="tile-scale" min="0.25" max="2" step="0.01" value="1"
+                 aria-label="Motif size in the pattern">
+          <output id="tile-scale-out">100%</output>
+        </label>
+        <!-- v3.10 · the same pattern controls a cogent has, acting on whole motifs -->
+        <label class="slider-row">
+          <span>Spacing</span>
+          <input type="range" class="adj-gap" min="-0.3" max="2" step="0.01" value="0.1" aria-label="Space between the motifs">
+          <output class="adj-gap-out">10%</output>
+        </label>
+        <label class="slider-row">
+          <span>Offset rows</span>
+          <input type="range" class="adj-row" min="0" max="1" step="0.01" value="0.5" aria-label="Shift every other row sideways">
+          <output class="adj-row-out">50%</output>
+        </label>
+        <label class="switch switch-row">
+          <input type="checkbox" id="tg-tile-mirror">
+          <span class="track" aria-hidden="true"></span>
+          <span>Mirror <small class="switch-sub">Every other one faces the other way</small></span>
+        </label>
+      </div>
+
+      <!-- v3.1 · a cogent: a pattern of it or one large one, round or a speech bubble -->
+      <div class="sub" id="cogent-controls" hidden>
+        <div class="segments cog-layout" id="seg-cog-layout" role="radiogroup" aria-label="Cogent layout">
+          <button type="button" role="radio" data-l="pattern" aria-checked="true">Pattern</button>
+          <button type="button" role="radio" data-l="single" aria-checked="false">Single</button>
+        </div>
+        <!-- v3.3 · the cogent's edge: round, or its rough sticker edge (the same cogent) -->
+        <div class="segments cog-edge" id="seg-cog-edge" role="radiogroup" aria-label="Cogent edge">
+          <button type="button" role="radio" data-e="round" aria-checked="true">Round</button>
+          <button type="button" role="radio" data-e="rough" aria-checked="false">Rough edges</button>
+        </div>
+        <label class="switch switch-row">
+          <input type="checkbox" id="tg-cog-bubble">
+          <span class="track" aria-hidden="true"></span>
+          <span>Speech bubble <small class="switch-sub">The lower-left corner square, filled from the image</small></span>
+        </label>
+        <label class="switch switch-row" id="cog-halo-row">
+          <input type="checkbox" id="tg-cog-halo">
+          <span class="track" aria-hidden="true"></span>
+          <span>Halo <small class="switch-sub">A thin outline</small></span>
+        </label>
+        <div class="swatch-line" id="cog-halo-colours" role="radiogroup" aria-label="Halo color" hidden>
+          <span class="swatch-lbl">Halo</span><span class="swatches"></span>
+        </div>
+        <div class="swatch-line" id="cog-ground" role="radiogroup" aria-label="Background color behind the cogent">
+          <span class="swatch-lbl">Ground</span><span class="swatches"></span>
+        </div>
+        <div class="cog-pattern">
+          <label class="slider-row">
+            <span>Size</span>
+            <input type="range" id="cog-tile" min="0.06" max="0.8" step="0.01" value="0.22" aria-label="Cogent size in the pattern">
+            <output id="cog-tile-out">22%</output>
+          </label>
+          <label class="slider-row">
+            <span>Spacing</span>
+            <input type="range" class="adj-gap" min="0" max="2" step="0.01" value="0.35" aria-label="Space between the cogents">
+            <output class="adj-gap-out">35%</output>
+          </label>
+          <label class="slider-row">
+            <span>Offset rows</span>
+            <input type="range" class="adj-row" min="0" max="1" step="0.01" value="0.5" aria-label="Shift every other row sideways">
+            <output class="adj-row-out">50%</output>
+          </label>
+          <label class="switch switch-row">
+            <input type="checkbox" id="tg-cog-mirror">
+            <span class="track" aria-hidden="true"></span>
+            <span>Mirror <small class="switch-sub">Every other one faces the other way</small></span>
+          </label>
+        </div>
+        <div class="cog-single">
+          <label class="slider-row">
+            <span>Scale</span>
+            <input type="range" id="cog-scale" min="0.3" max="2.5" step="0.01" value="1" aria-label="Cogent scale">
+            <output id="cog-scale-out">100%</output>
+          </label>
+        </div>
+        <p class="micro">Drag on the preview to move it.</p>
+      </div>
+
+      <!-- artwork and uploads -->
+      <!-- an uploaded picture: the full picture, or repeated as a pattern -->
+      <div class="sub" id="upload-fit" hidden>
+        <span class="lbl lbl-sub">Use the picture as</span>
+        <div class="segments" id="seg-upload-fit" role="radiogroup" aria-label="Use the picture as">
+          <button type="button" role="radio" data-f="fill" aria-checked="true">Full picture</button>
+          <button type="button" role="radio" data-f="pattern" aria-checked="false">Pattern</button>
+        </div>
+        <div id="pattern-controls" hidden>
+          <label class="slider-row">
+            <span>Tile size</span>
+            <input type="range" id="pat-size" min="0.05" max="1" step="0.01" value="0.3" aria-label="Pattern tile size">
+            <output id="pat-size-out">30%</output>
+          </label>
+          <label class="slider-row">
+            <span>Spacing</span>
+            <input type="range" class="adj-gap" min="0" max="2" step="0.01" value="0" aria-label="Space between the tiles">
+            <output class="adj-gap-out">0%</output>
+          </label>
+          <label class="slider-row">
+            <span>Offset rows</span>
+            <input type="range" class="adj-row" min="0" max="1" step="0.01" value="0" aria-label="Shift every other row sideways">
+            <output class="adj-row-out">Off</output>
+          </label>
+          <label class="slider-row" hidden>
+            <span>Horizontal spacing</span>
+            <input type="range" id="pat-gx" min="0" max="2" step="0.01" value="0" aria-label="Space between pattern tiles, left to right">
+            <output id="pat-gx-out">0%</output>
+          </label>
+          <label class="slider-row" hidden>
+            <span>Vertical spacing</span>
+            <input type="range" id="pat-gy" min="0" max="2" step="0.01" value="0" aria-label="Space between pattern tiles, top to bottom">
+            <output id="pat-gy-out">0%</output>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="pat-mirror">
+            <span class="track" aria-hidden="true"></span>
+            <span>Mirror tiles <small class="switch-sub">Every other tile flipped, so the edges meet — seamless with any picture</small></span>
+          </label>
+          <p class="micro">Drag the pattern on the preview to shift it.
+            <button class="link-btn link-inline" id="pat-reset" type="button">Reset</button></p>
+        </div>
+      </div>
+      <div class="sub image-only" id="image-controls" hidden>
+        <label class="slider-row">
+          <span id="crop-label">Scale</span>
+          <input type="range" id="img-zoom" min="1" max="8" step="0.02" value="1"
+                 aria-label="Background scale">
+          <output id="img-zoom-out">100%</output>
+        </label>
+        <details class="img-pos" id="img-pos">
+        <summary>Position</summary>
+        <label class="slider-row">
+          <span>Left · Right</span>
+          <input type="range" id="img-x" min="-1" max="1" step="0.005" value="0" aria-label="Picture position, left to right">
+          <output id="img-x-out">0</output>
+        </label>
+        <label class="slider-row">
+          <span>Up · Down</span>
+          <input type="range" id="img-y" min="-1" max="1" step="0.005" value="0" aria-label="Picture position, top to bottom">
+          <output id="img-y-out">0</output>
+        </label>
+        </details>
+        <div class="swatch-line" id="img-ground" role="radiogroup" aria-label="Surface color behind the picture">
+          <span class="swatch-lbl">Surface</span><span class="swatches"></span>
+        </div>
+        <p class="micro">Drag the picture on the preview to move or crop it.
+          <button class="link-btn link-inline" id="img-reset" type="button">Reset</button></p>
+      </div>
+
+
+      <div class="sub" id="video-controls" hidden>
+        <span class="lbl lbl-sub">Video</span>
+        <div class="toggles toggles-tight">
+          <label class="switch">
+            <input type="checkbox" id="tg-loop" checked>
+            <span class="track" aria-hidden="true"></span>
+            <span>Loop</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="tg-mute">
+            <span class="track" aria-hidden="true"></span>
+            <span>Mute audio</span>
+          </label>
+        </div>
+        <p class="micro" id="video-note">Looping fills the whole export length. With it off,
+          the clip plays once and holds its last frame.</p>
+      </div>
+    </div>
+
+    <!-- v3.15 · an overlay clip (a video, picture, text, badge, cogent or drawing on the film's own track) -->
+    <div class="group" id="group-overlay" data-tabs="overlay">
+      <div class="group-head"><h2 class="group-title" id="ov-title">Overlay clip</h2></div>
+      <div id="ov-body"></div>
+    </div>
+
+    <!-- v3.1 · a drawing: its look; Draw more adds strokes to it -->
+    <div class="group" id="group-draw" data-tabs="draw">
+      <div class="group-head"><h2 class="group-title">Drawing</h2></div>
+      <div class="swatch-line" id="draw-colours" role="radiogroup" aria-label="Drawing color">
+        <span class="swatch-lbl">Color</span><span class="swatches"></span>
+      </div>
+      <label class="slider-row">
+        <span>Line</span>
+        <input type="range" id="draw-width" min="2" max="40" step="1" value="10" aria-label="Line width">
+        <output id="draw-width-out">10</output>
+      </label>
+      <label class="slider-row">
+        <span>Opacity</span>
+        <input type="range" id="draw-opacity" min="0.15" max="1" step="0.01" value="1" aria-label="Drawing opacity">
+        <output id="draw-opacity-out">100%</output>
+      </label>
+      <label class="slider-row">
+        <span>Size</span>
+        <input type="range" id="draw-scale" min="0.25" max="3" step="0.01" value="1" aria-label="Drawing size">
+        <output id="draw-scale-out">100%</output>
+      </label>
+      <!-- v3.21 · in a video the drawing draws itself on, stroke by stroke (on by default) -->
+      <label class="switch switch-row draw-anim-row" id="draw-anim-row">
+        <input type="checkbox" id="draw-anim" checked>
+        <span class="track" aria-hidden="true"></span>
+        <span>Draw it on in the video<small class="switch-sub">Stroke by stroke, as the section starts</small></span>
+      </label>
+      <div class="draw-acts">
+        <button class="btn btn-outline" id="draw-more" type="button">Draw more</button>
+        <button class="btn btn-outline" id="draw-dup" type="button">Duplicate</button>
+        <button class="btn btn-ghost" id="draw-remove" type="button">Remove</button>
+      </div>
+    </div>
+
+    <!-- 3 · Badge — above the copy; hidden for brands without a lockup -->
+    <div class="group" id="badge-field" data-tabs="badge">
+      <div class="group-head">
+        <h2 class="group-title"><label for="tg-badge">Badge</label></h2>
+        <label class="switch switch-bare">
+          <input type="checkbox" id="tg-badge" checked>
+          <span class="track" aria-hidden="true"></span>
+          <span class="sr-only">Show badge</span>
+        </label>
+      </div>
+      <div class="group-body" id="badge-controls" data-turns-on="badge">
+        <!-- Show on: which sections this badge is on (filled by app.js) -->
+        <div class="show-on-host" id="badge-showon"></div>
+        <!-- the badge is three parts, each shown or hidden on its own:
+             upper badge (the "Powered by" pill) · badge image · lower badge (a text box) -->
+        <div class="badge-part" id="bp-upper" data-bpart="upper">
+          <label class="switch switch-row bp-head">
+            <input type="checkbox" id="tg-powered" checked>
+            <span class="track" aria-hidden="true"></span>
+            <span>Upper<span class="sr-only"> badge — the label above the badge</span></span>
+          </label>
+          <div class="bp-body" id="bp-upper-body">
+            <input type="text" class="lower-text" id="upper-text" maxlength="40" placeholder="Powered by" aria-label="Upper badge text" spellcheck="true">
+          </div>
+        </div>
+
+        <div class="badge-part" id="bp-image" data-bpart="image">
+          <label class="switch switch-row bp-head">
+            <input type="checkbox" id="tg-badge-image" checked>
+            <span class="track" aria-hidden="true"></span>
+            <span id="bp-image-label">Badge image</span>
+          </label>
+          <div class="bp-body" id="bp-image-body">
+            <!-- the brand's badges, four at a time; the rest under "Show all" -->
+            <div class="thumbs badge-thumbs" id="badge-thumbs" role="radiogroup" aria-label="Badge style"></div>
+            <button class="show-all" id="badge-show-all" type="button" hidden>Show all</button>
+            <!-- the text badge: its middle words and colours (filled by app.js) -->
+            <div class="badge-middle-host" id="bp-middle" hidden></div>
+            <label class="slider-row">
+              <span>Scale</span>
+              <input type="range" id="badge-scale" min="0.25" max="1.4" step="0.02" value="1"
+                     aria-label="Badge scale">
+              <output id="badge-scale-out">100%</output>
+            </label>
+            <!-- v3.1: a round portrait badge — circle or speech bubble, with an optional Halo -->
+            <div class="bp-shape" id="bp-shape" hidden>
+              <div class="shape-row">
+                <span class="swatch-lbl">Shape</span>
+                <div class="segments segments-sm" id="seg-badge-shape" role="radiogroup" aria-label="Badge shape">
+                  <button type="button" role="radio" data-shape="round" aria-checked="true"><i class="shape-ico is-round" aria-hidden="true"></i>Round</button>
+                  <button type="button" role="radio" data-shape="bubble" aria-checked="false"><i class="shape-ico is-bubble" aria-hidden="true"></i>Bubble</button>
+                </div>
+              </div>
+              <label class="switch switch-row">
+                <input type="checkbox" id="tg-halo">
+                <span class="track" aria-hidden="true"></span>
+                <span>Halo <small class="switch-sub">A thin outline round the badge</small></span>
+              </label>
+              <div class="swatch-line" id="halo-colours" role="radiogroup" aria-label="Halo color" hidden>
+                <span class="swatch-lbl">Color</span><span class="swatches"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="badge-part" id="bp-lower" data-bpart="lower">
+          <label class="switch switch-row bp-head">
+            <input type="checkbox" id="tg-badge-lower">
+            <span class="track" aria-hidden="true"></span>
+            <span>Lower<span class="sr-only"> badge — a text box under the badge</span></span>
+          </label>
+          <div class="bp-body" id="bp-lower-body" hidden>
+            <input type="text" class="lower-text" id="lower-text" maxlength="60" aria-label="Lower badge text" spellcheck="true">
+            <div class="swatch-line lower-row" data-lower="ink" role="radiogroup" aria-label="Lower badge text color">
+              <span class="swatch-lbl">Text</span><span class="swatches"></span></div>
+            <div class="swatch-line lower-row" data-lower="fill" role="radiogroup" aria-label="Lower badge background">
+              <span class="swatch-lbl">Background</span><span class="swatches"></span></div>
+            <label class="switch switch-row">
+              <input type="checkbox" id="tg-lower-stroke">
+              <span class="track" aria-hidden="true"></span>
+              <span>Stroke</span>
+            </label>
+            <div id="lower-stroke-body" hidden>
+              <div class="swatch-line lower-row" data-lower="stroke" role="radiogroup" aria-label="Lower badge stroke color">
+                <span class="swatch-lbl">Color</span><span class="swatches"></span></div>
+              <label class="slider-row">
+                <span>Width</span>
+                <input type="range" id="lower-stroke-w" min="1" max="12" step="1" value="3" aria-label="Lower badge stroke width">
+                <output id="lower-stroke-w-out">3 px</output>
+              </label>
+            </div>
+            <label class="slider-row">
+              <span>Scale</span>
+              <input type="range" id="lower-scale" min="0.6" max="1.6" step="0.02" value="1" aria-label="Lower badge scale">
+              <output id="lower-scale-out">100%</output>
+            </label>
+            <button class="link-btn text-reset" id="lower-reset" type="button">Reset to default</button>
+          </div>
+        </div>
+      </div>
+      <!-- more badges on this section, each placed and sized on its own -->
+      <div class="badge-more-wrap">
+        <div class="blocks" id="badge-more"></div>
+        <button class="upload-tile upload-tile-sm" id="badge-add" type="button">
+          <span class="upload-plus" aria-hidden="true">+</span>
+          <span>Add a badge<small>Another badge, on this section only</small></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 4 · Header -->
+    <!-- 4 · Text: on or off, and whether it is a header alone or a header with its body -->
+    <div class="group" id="group-text" data-tabs="text">
+      <div class="group-head">
+        <h2 class="group-title"><label for="tg-text">Text</label></h2>
+        <label class="switch switch-bare">
+          <input type="checkbox" id="tg-text">
+          <span class="track" aria-hidden="true"></span>
+          <span class="sr-only">Show text</span>
+        </label>
+      </div>
+      <div class="segments" id="seg-textmode" role="radiogroup" aria-label="What the text shows" hidden>
+        <button type="button" role="radio" data-m="h1">Header</button>
+        <button type="button" role="radio" data-m="both">Header + body</button>
+      </div>
+    </div>
+
+    <div class="group" id="group-h1" data-tabs="text" data-turns-on="text">
+      <div class="group-head">
+        <h2 class="group-title"><label for="in-h1">Header</label></h2>
+        <label class="switch switch-bare part-switch" hidden>
+          <input type="checkbox" id="tg-h1" checked>
+          <span class="track" aria-hidden="true"></span>
+          <span class="sr-only">Show header</span>
+        </label>
+      </div>
+      <div class="group-body" id="h1-controls">
+        <div class="field-fav">
+          <textarea id="in-h1" rows="2" spellcheck="true" aria-label="Header text"
+                    placeholder="Design as the limit of truth"></textarea>
+          <button class="field-color" type="button" data-part="h1" aria-haspopup="dialog"
+                  aria-label="Header colors" title="Header colors"><i class="field-color-dot" aria-hidden="true"></i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.3 0 2-.8 2-1.8 0-1.3-1.1-1.6-1.1-2.7 0-1 .8-1.6 1.9-1.6h2.1a3.6 3.6 0 0 0 3.6-3.6C20.5 6.9 16.7 3.5 12 3.5z"/><circle cx="7.6" cy="11" r="1.1"/><circle cx="10.2" cy="7.4" r="1.1"/><circle cx="14.6" cy="7.6" r="1.1"/></svg></button>
+        </div>
+        <label class="slider-row">
+          <span>Scale</span>
+          <input type="range" id="h1-scale" min="0.6" max="1.8" step="0.02" value="1"
+                 aria-label="Header scale">
+          <output id="h1-scale-out">100%</output>
+        </label>
+      </div>
+    </div>
+
+    <!-- 5 · Body -->
+    <div class="group" id="group-body" data-tabs="text" data-turns-on="text">
+      <div class="group-head">
+        <h2 class="group-title"><label for="in-body">Body</label></h2>
+        <label class="switch switch-bare part-switch" hidden>
+          <input type="checkbox" id="tg-body" checked>
+          <span class="track" aria-hidden="true"></span>
+          <span class="sr-only">Show body</span>
+        </label>
+      </div>
+      <div class="group-body" id="body-controls">
+        <div class="field-fav">
+          <textarea id="in-body" rows="4" spellcheck="true" aria-label="Body text"
+                    placeholder="Explore clean portrait backdrops."></textarea>
+          <button class="field-color" type="button" data-part="body" aria-haspopup="dialog"
+                  aria-label="Body colors" title="Body colors"><i class="field-color-dot" aria-hidden="true"></i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.3 0 2-.8 2-1.8 0-1.3-1.1-1.6-1.1-2.7 0-1 .8-1.6 1.9-1.6h2.1a3.6 3.6 0 0 0 3.6-3.6C20.5 6.9 16.7 3.5 12 3.5z"/><circle cx="7.6" cy="11" r="1.1"/><circle cx="10.2" cy="7.4" r="1.1"/><circle cx="14.6" cy="7.6" r="1.1"/></svg></button>
+        </div>
+        <p class="micro">Start a line with – for a bullet.</p>
+        <label class="slider-row">
+          <span>Scale</span>
+          <input type="range" id="body-scale" min="0.6" max="1.8" step="0.02" value="1"
+                 aria-label="Body scale">
+          <output id="body-scale-out">100%</output>
+        </label>
+      </div>
+    </div>
+
+    <div class="group" id="group-text-style" data-tabs="text" data-turns-on="text">
+      <div class="group-head"><h2 class="group-title">Style</h2></div>
+      <p class="micro text-style-note" id="text-style-note" hidden>For the header and body above — each text box has its own.</p>
+      <!-- one control for how the text looks: the brand's Light or Dark set, or your own colours -->
+      <div class="segments" id="seg-tone" role="radiogroup" aria-label="Text style">
+        <!-- named for the look, not the type: light type sits on a dark panel ("Dark"), dark type on a light one ("Light") -->
+        <button type="button" role="radio" data-t="dark">Light</button>
+        <button type="button" role="radio" data-t="light">Dark</button>
+        <button type="button" role="radio" data-t="custom">Custom</button>
+      </div>
+      <label class="nobg-check">
+        <input type="checkbox" id="tg-nobg">
+        <span>No background color</span>
+      </label>
+      <p class="micro tone-note" id="tone-note" hidden>Your own colors: background in Custom, text in each field's palette. Light or Dark goes back to the brand's.</p>
+      <button class="link-btn text-reset" id="text-reset" type="button"
+              title="The brand's text style, colors, border and size for this section — your words and position stay">Reset to default</button>
+      <div class="toggles toggles-tight toggles-spaced" hidden>
+        <label class="switch">
+          <input type="checkbox" id="tg-card">
+          <span class="track" aria-hidden="true"></span>
+          <span>Text panel</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 6 · Text style — only while some text is showing -->
+    <!-- 4b · More text: extra header + body blocks on this screen -->
+    <div class="group" id="group-blocks" data-tabs="text" data-turns-on="text">
+      <div class="group-head"><h2 class="group-title">Text boxes</h2></div>
+      <div class="blocks" id="blocks"></div>
+      <p class="micro" id="blocks-empty">Another header and body, placed on its own — on this section only.</p>
+      <button class="upload-tile upload-tile-sm" id="blocks-add" type="button">
+        <span class="upload-plus" aria-hidden="true">+</span>
+        <span>Add text box<small>On this section only</small></span>
+      </button>
+    </div>
+
+    <!-- 6b · Buttons: their own elements — the only place a button is made -->
+    <div class="group" id="group-buttons" data-tabs="buttons">
+      <div class="group-head"><h2 class="group-title">Buttons</h2></div>
+      <div class="blocks" id="buttons"></div>
+      <p class="micro" id="buttons-empty">A button for a call to action — on this section only. Text, colors, stroke, corners and size are its own. Drag it on the preview.</p>
+      <button class="upload-tile upload-tile-sm" id="buttons-add" type="button">
+        <span class="upload-plus" aria-hidden="true">+</span>
+        <span>Add button<small>On this section only</small></span>
+      </button>
+    </div>
+
+    <!-- 7 · Photo / Video Card -->
+    <div class="group" id="group-inset" data-tabs="card">
+      <div class="group-head">
+        <h2 class="group-title"><label for="tg-inset">Media</label></h2>
+        <label class="switch switch-bare">
+          <input type="checkbox" id="tg-inset" checked>
+          <span class="track" aria-hidden="true"></span>
+          <span class="sr-only">Show media</span>
+        </label>
+      </div>
+      <p class="micro card-scope" id="inset-scope" hidden></p>
+      <div class="group-body" id="inset-body" data-turns-on="card">
+      <div class="show-on-host" id="inset-showon"></div>
+      <div class="upload-row">
+        <button class="upload-tile upload-tile-sm" id="btn-inset" type="button">
+          <span class="upload-plus" aria-hidden="true">+</span>
+          <span id="inset-label">Add image or video<small>From your files</small></span>
+        </button>
+        <button class="upload-tile upload-tile-sm record-tile" type="button" data-camera="card">
+          <span class="upload-plus" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6.5" width="12.5" height="11" rx="2.5"/><path d="M15.5 10.5 21 7.5v9l-5.5-3z"/></svg></span><span>Record</span>
+        </button>
+      </div>
+      <p class="upload-error" id="inset-error" hidden></p>
+      <input type="file" id="inset-input" accept="image/*,video/*" hidden>
+      <div id="inset-controls" hidden>
+        <label class="slider-row">
+          <span>Scale</span>
+          <input type="range" id="inset-scale" min="0.2" max="1.6" step="0.01" value="1"
+                 aria-label="Media scale">
+          <output id="inset-scale-out">100%</output>
+        </label>
+        <label class="slider-row">
+          <span>Corners</span>
+          <input type="range" id="inset-radius" min="0" max="1" step="0.01" value="0.14"
+                 aria-label="Media corner radius">
+          <output id="inset-radius-out">14%</output>
+        </label>
+        <p class="micro">Drag it on the preview to move it.</p>
+        <button class="btn btn-ghost btn-block" id="inset-remove" type="button">Remove media</button>
+      </div>
+      </div>
+      <!-- more media on this section: each placed and sized on its own -->
+      <div class="media-more" id="media-more-wrap">
+        <div class="blocks" id="media-more"></div>
+        <button class="upload-tile upload-tile-sm" id="media-add" type="button">
+          <span class="upload-plus" aria-hidden="true">+</span>
+          <span>Add more media<small>Another photo or video — on this section only</small></span>
+        </button>
+        <input type="file" id="media-more-input" accept="image/*,video/*" multiple hidden>
+        <p class="upload-error" id="media-more-error" hidden></p>
+      </div>
+    </div>
+
+    <!-- 8 · View -->
+    <div class="group" id="group-view" data-tabs="all">
+      <p class="neutral-hint" id="neutral-hint"><b>Tap anything to edit it.</b>
+        <span class="neutral-plus">+ Add</span> puts something new on this section.</p>
+      <div class="toggles toggles-tight view-toggles">
+        <label class="switch">
+          <input type="checkbox" id="tg-guides">
+          <span class="track" aria-hidden="true"></span>
+          <span>Guides</span>
+        </label>
+        <label class="switch" title="Centre lines, thirds and columns — dragging snaps to them. Never exported.">
+          <input type="checkbox" id="tg-grid">
+          <span class="track" aria-hidden="true"></span>
+          <span>Grid</span>
+        </label>
+      </div>
+      <button class="tidy-btn" id="tidy-btn" type="button">
+        <span class="tidy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="6" y="5" width="12" height="4" rx="1.2"/><rect x="8" y="11" width="8" height="3" rx="1.2"/><rect x="5" y="16" width="14" height="4" rx="1.2"/></svg></span>
+        <span>Tidy up<small>Centred and evenly spaced · Undo puts it back</small></span>
+      </button>
+      <!-- Start new: a starting design from this brand's own pieces (or blank) -->
+      <button class="tidy-btn" id="start-new" type="button">
+        <span class="tidy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><path d="M17 14v6M14 17h6"/></svg></span>
+        <span>Start new<small>Pick a starting design made from this brand · Undo goes back</small></span>
+      </button>
+    </div>
+
+    <!-- 9 · Saved designs (templates) -->
+    <div class="group" id="group-templates" data-tabs="all">
+      <div class="group-head"><h2 class="group-title">Saved designs</h2></div>
+      <div class="save-row">
+        <input type="text" id="tpl-name" placeholder="Name this design" maxlength="40"
+               aria-label="Template name">
+        <button class="btn btn-outline" id="tpl-save" type="button">Save</button>
+      </div>
+      <p class="upload-error" id="tpl-error" hidden></p>
+      <!-- newest first, one swipeable row -->
+      <div class="templates" id="templates" role="list" aria-label="Saved designs"></div>
+      <button class="show-all" id="tpl-show-all" type="button" hidden>Show all</button>
+      <p class="micro" id="tpl-empty">Name it and tap Save — a design keeps the brand, backdrop,
+        text, layout and every setting, on this browser.</p>
+    </div>
+
+
+  </section>
+
+  <!-- desktop: the timeline spans the whole width under the preview and the panel
+       (it moves here from the stage; on a phone it stays under the preview) -->
+  <section class="tl-row" id="tl-row" aria-label="Timeline"></section>
+</main>
+
+<!-- ── "Show all" picker — the full gallery or badge set, in a modal ───── -->
+<div class="ui-scrim" id="ui-scrim" hidden></div>
+<!-- colours for the header or the body: text, its background, a border — brand colours and your own -->
+<div class="color-pop" id="color-pop" hidden>
+  <div class="cp-scrim" id="cp-scrim"></div>
+  <div class="cp-card" id="cp-card" role="dialog" aria-modal="true" aria-label="Colors">
+    <div class="cp-part" data-part="h1" hidden>
+      <h2 class="cp-title" id="cp-title-h1">Header colors</h2>
+      <div class="cp-row"><span class="cp-lbl">Text</span>
+        <div class="swatch-line" data-part="h1" data-kind="text" role="radiogroup" aria-label="Header text color"><span class="swatches"></span></div></div>
+      <div class="cp-row"><span class="cp-lbl">Background</span>
+        <div class="swatch-line" data-part="h1" data-kind="card" role="radiogroup" aria-label="Header background color"><span class="swatches"></span></div></div>
+      <div class="cp-row"><span class="cp-lbl">Border</span>
+        <label class="slider-row cp-border">
+          <span class="sr-only">Border width</span>
+          <input type="range" class="cp-border-w" data-part="h1" min="0" max="16" step="1" value="0" aria-label="Header border width">
+          <output class="cp-border-out" data-part="h1">Off</output>
+        </label>
+        <div class="swatch-line" data-part="h1" data-kind="border" role="radiogroup" aria-label="Header border color"><span class="swatches"></span></div></div>
+    </div>
+    <div class="cp-part" data-part="body" hidden>
+      <h2 class="cp-title" id="cp-title-body">Body colors</h2>
+      <div class="cp-row"><span class="cp-lbl">Text</span>
+        <div class="swatch-line" data-part="body" data-kind="text" role="radiogroup" aria-label="Body text color"><span class="swatches"></span></div></div>
+      <div class="cp-row"><span class="cp-lbl">Background</span>
+        <div class="swatch-line" data-part="body" data-kind="card" role="radiogroup" aria-label="Body background color"><span class="swatches"></span></div></div>
+      <div class="cp-row"><span class="cp-lbl">Border</span>
+        <label class="slider-row cp-border">
+          <span class="sr-only">Border width</span>
+          <input type="range" class="cp-border-w" data-part="body" min="0" max="16" step="1" value="0" aria-label="Body border width">
+          <output class="cp-border-out" data-part="body">Off</output>
+        </label>
+        <div class="swatch-line" data-part="body" data-kind="border" role="radiogroup" aria-label="Body border color"><span class="swatches"></span></div></div>
+    </div>
+    <p class="micro cp-note">Brand colors first, then your own — <b>+</b> adds one.</p>
+    <button class="btn btn-primary cp-done" id="cp-done" type="button">Done</button>
+  </div>
+</div>
+
+<div class="sheet-scrim" id="picker" hidden>
+  <div class="sheet picker-sheet" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <button class="sheet-close" id="picker-close" type="button" aria-label="Close">×</button>
+    <h2 id="picker-title">Backgrounds</h2>
+    <p id="picker-sub">Pick one — it replaces the current choice.</p>
+    <div class="picker-body" id="picker-body"></div>
+    <!-- v3.9 · the pattern library: Mirror tiles for the pattern in use, while choosing -->
+    <label class="switch switch-row picker-mirror" id="picker-mirror">
+      <input type="checkbox" id="tg-picker-mirror">
+      <span class="track" aria-hidden="true"></span>
+      <span>Mirror tiles <small class="switch-sub">Every other tile faces the other way</small></span>
+    </label>
+    <!-- Backgrounds only: add your own -->
+    <div class="picker-add" id="picker-add" hidden>
+      <h3 class="picker-add-title">Add your own</h3>
+      <div class="picker-colours" id="picker-colours"></div>
+      <div class="picker-add-row">
+        <button class="btn btn-outline" id="picker-upload" type="button">Image or video</button>
+        <button class="btn btn-outline" id="picker-camera" type="button">Record with camera</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── start screen: continue or create ─────────────────────────────── -->
+<section class="home" id="home" hidden aria-label="Start">
+  <div class="home-inner">
+    <header class="home-top">
+      <span class="home-title">Media Brand Kit</span>
+    </header>
+
+    <!-- v3.1: Create new first — one tap per brand opens a Reel (the format is changed in the editor) -->
+    <section class="home-sec home-create">
+      <div class="home-head"><h2 id="home-create-title">Create new</h2></div>
+      <div class="home-brands" id="home-create-list"></div>
+    </section>
+
+    <section class="home-sec home-recent" id="home-recent" hidden>
+      <div class="home-head">
+        <h2>Recent</h2>
+        <button class="home-link" id="home-show-all" type="button" hidden>Show all</button>
+      </div>
+      <div class="home-row" id="home-recent-list" role="list"></div>
+    </section>
+
+    <section class="home-sec home-saved" id="home-saved" hidden>
+      <div class="home-head">
+        <h2>Saved</h2>
+        <button class="home-link" id="home-saved-all" type="button" hidden>Show all saved</button>
+      </div>
+      <div class="home-row" id="home-saved-list" role="list"></div>
+    </section>
+
+  </div>
+</section>
+
+<!-- Show all: every recent and saved design -->
+<!-- v3.2 · the heart's popup: name the project and save it (the same save as Saved designs) -->
+<div class="burger-scrim" id="save-scrim" hidden></div>
+<div class="save-pop" id="save-pop" role="dialog" aria-labelledby="save-pop-title" hidden>
+  <h2 class="save-pop-title" id="save-pop-title">Save project</h2>
+  <p class="save-pop-sub">Saved on this browser, under All projects.</p>
+  <input type="text" id="save-pop-name" maxlength="40" placeholder="Name this project" aria-label="Project name" autocomplete="off">
+  <p class="upload-error" id="save-pop-error" hidden></p>
+  <div class="save-pop-actions">
+    <button class="link-btn" id="save-pop-all" type="button">See saved projects</button>
+    <button class="btn btn-primary" id="save-pop-go" type="button">Save</button>
+  </div>
+</div>
+<div class="sheet-scrim home-all-scrim" id="home-all" hidden>
+  <div class="sheet picker-sheet home-all-sheet" role="dialog" aria-modal="true" aria-labelledby="home-all-title">
+    <button class="sheet-close" id="home-all-close" type="button" aria-label="Close">×</button>
+    <h2 id="home-all-title">All projects</h2>
+    <div class="segments home-filter" id="home-all-filter" role="radiogroup" aria-label="Show">
+      <button type="button" role="radio" data-f="all" aria-checked="true">All</button>
+      <button type="button" role="radio" data-f="recent" aria-checked="false">Recent</button>
+      <button type="button" role="radio" data-f="saved" aria-checked="false">Saved</button>
+    </div>
+    <div class="home-grid" id="home-all-list" role="list"></div>
+    <p class="micro" id="home-all-empty" hidden>Nothing here yet.</p>
+  </div>
+</div>
+
+<!-- ── start from… ───────────────────────────────────────────────────── -->
+<div class="sheet-scrim" id="start-sheet" hidden>
+  <div class="sheet picker-sheet start-sheet" role="dialog" aria-modal="true" aria-labelledby="start-title">
+    <button class="sheet-close" id="start-close" type="button" aria-label="Close">×</button>
+    <h2 id="start-title">Start from a template</h2>
+    <p id="start-sub">Made from this brand's own backgrounds, badges, type and buttons.</p>
+    <div class="start-grid" id="start-grid" role="list"></div>
+    <div class="start-actions">
+      <button class="btn btn-outline" id="start-shuffle" type="button">Shuffle<small>More from the same pieces</small></button>
+    </div>
+  </div>
+</div>
+
+<!-- ── export sheet ───────────────────────────────────────────────────── -->
+<div class="sheet-scrim" id="sheet" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <button class="sheet-close" id="sheet-close" type="button" aria-label="Close">×</button>
+    <h2 id="sheet-title">Export</h2>
+    <!-- what will be exported: known from the editor, so shown, not asked -->
+    <div class="sheet-summary" id="sheet-summary">
+      <div class="sheet-thumbs" id="sheet-thumbs" aria-hidden="true"></div>
+      <p class="sheet-facts"><span class="type-chip" id="sheet-type">Video</span> <span id="sheet-facts"></span></p>
+    </div>
+
+    <!-- step 2: only what the chosen file needs -->
+    <div class="sheet-options" id="sheet-options">
+      <div id="sheet-filetype-row">
+        <span class="lbl lbl-sub">File type</span>
+        <div class="segments seg-size" id="seg-filetype" role="radiogroup" aria-label="File type">
+          <button type="button" role="radio" data-kind="png" aria-checked="true">PNG<small>Sharpest</small></button>
+          <button type="button" role="radio" data-kind="jpg" aria-checked="false">JPG<small>Smaller files</small></button>
+        </div>
+      </div>
+      <span class="lbl lbl-sub">Size</span>
+      <div class="segments seg-size" id="seg-size" role="radiogroup" aria-label="Size">
+        <button type="button" role="radio" data-scale="1" aria-checked="true">Standard<small id="size-1">1080 × 1920</small></button>
+        <button type="button" role="radio" data-scale="2" aria-checked="false">Large · 2×<small id="size-2">2160 × 3840</small></button>
+      </div>
+
+      <div class="sheet-video" id="sheet-video" hidden>
+        <label class="switch" id="sheet-mute-row">
+          <input type="checkbox" id="sheet-mute">
+          <span class="track" aria-hidden="true"></span>
+          <span>Mute audio</span>
+        </label>
+        <label class="switch" id="sheet-cover-row">
+          <input type="checkbox" id="sheet-cover" checked>
+          <span class="track" aria-hidden="true"></span>
+          <span>Also save a cover image <small class="switch-sub" id="sheet-cover-sub">the Hook, as JPG</small></span>
+        </label>
+        <p class="micro" id="video-hint">Records in real time.</p>
+      </div>
+      <p class="micro scenes-note" id="scenes-note" hidden></p>
+
+      <button class="btn btn-primary btn-block" id="save-go" type="button">Save PNG</button>
+    </div>
+    <!-- each item of a section — background, text, buttons, media, badge — as its own PNG -->
+    <details class="sheet-items" id="sheet-items">
+      <summary><span>Items as separate PNGs</span><small>Transparent · for other tools</small></summary>
+      <div class="segments items-scenes" id="items-scenes" role="radiogroup" aria-label="Section"></div>
+      <div class="items-list" id="items-list"></div>
+      <label class="switch">
+        <input type="checkbox" id="items-full">
+        <span class="track" aria-hidden="true"></span>
+        <span>Full frame <small class="switch-sub">Each item where it sits, at the full size — for layering</small></span>
+      </label>
+      <button class="btn btn-outline btn-block" id="items-all" type="button">Save all items as .zip</button>
+    </details>
+    <p class="upload-error" id="export-note" hidden></p>
+  </div>
+</div>
+
+
+<!-- ── camera: record a clip for the background or the photo / video card ─────── -->
+<div class="sheet-scrim" id="camera" hidden>
+  <div class="sheet camera-sheet" role="dialog" aria-modal="true" aria-labelledby="camera-title">
+    <button class="sheet-close" id="camera-close" type="button" aria-label="Close">×</button>
+    <h2 id="camera-title">Record a clip</h2>
+    <p id="camera-sub">Your browser will ask to use the camera and microphone.</p>
+    <div class="camera-view">
+      <video id="camera-live" playsinline muted autoplay></video>
+      <video id="camera-take" playsinline controls hidden></video>
+      <span class="camera-rec" id="camera-rec" hidden>● <span id="camera-clock">0:00</span></span>
+    </div>
+    <p class="upload-error" id="camera-error" hidden></p>
+    <div class="camera-row" id="camera-ready">
+      <button class="btn btn-outline" id="camera-flip" type="button">Flip camera</button>
+      <button class="btn btn-primary" id="camera-go" type="button">Start recording</button>
+    </div>
+    <div class="camera-row" id="camera-done" hidden>
+      <button class="btn btn-ghost" id="camera-retake" type="button">Retake</button>
+      <button class="btn btn-outline" id="camera-card" type="button">Use as photo / video card</button>
+      <button class="btn btn-primary" id="camera-bg" type="button">Use as background</button>
+    </div>
+  </div>
+</div>
+
+<!-- a clip's options, shown above the clip that was tapped -->
+<div class="clip-menu" id="clip-menu" role="menu" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
