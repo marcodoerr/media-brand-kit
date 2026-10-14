@@ -118,6 +118,12 @@ const fonts = (S, h1Scale, bodyScale) => {
   return { h1: style('h1', h1Scale), body: style('body', bodyScale) };
 };
 
+/** The active brand's base header / body sizes (px at a 1080 unit), before scale. */
+export const baseTypeSizes = () => {
+  const own = (activeBrand() && activeBrand().type) || {};
+  return { h1: (own.h1 && own.h1.size) || BASE_TYPE.h1.size, body: (own.body && own.body.size) || BASE_TYPE.body.size };
+};
+
 /* Header and Body scale independently. Designs saved before that had one
    shared `scale`, so either one falls back to it and old templates render
    exactly as they did. */
@@ -717,9 +723,10 @@ function capCentre(ctx, mid, fs) {
   return mid + cap / 2;
 }
 
-function drawButton(ctx, btn, base) {
-  const { m, rect } = btn;
-  if (m.lux) { paintLux(ctx, rect.x, rect.y, m.bw, m.bh, m, base); return; }
+/** A standard button's colours and corner radius as drawn on `base` (shared by drawButton and
+    the PowerPoint export, so both use the same colours). Luxury buttons are painted, not filled. */
+export function buttonPaint(btn, base) {
+  const { m } = btn;
   let fill = m.fill || m.brand.bg, ink = m.ink || m.brand.ink;
   // the brand's own colours swap when the button would vanish into its background
   if (!m.fill && !m.ink && base && /^#[0-9a-f]{6}$/i.test(base) && contrast(m.brand.bg, base) < 1.7) {
@@ -730,6 +737,13 @@ function drawButton(ctx, btn, base) {
     ink = [m.brand.ink, m.brand.bg, '#ffffff', '#111111'].find((c) => contrast(fill, c) >= 3) || '#ffffff';
   }
   const rad = (m.bh / 2) * (typeof m.radius === 'number' ? m.radius : 1);
+  return { fill, ink, rad, stroke: m.stroke, sw: m.sw };
+}
+
+function drawButton(ctx, btn, base) {
+  const { m, rect } = btn;
+  if (m.lux) { paintLux(ctx, rect.x, rect.y, m.bw, m.bh, m, base); return; }
+  const { fill, ink, rad } = buttonPaint(btn, base);
   ctx.save();
   if (m.stroke) {
     roundRect(ctx, rect.x - m.sw, rect.y - m.sw, m.bw + m.sw * 2, m.bh + m.sw * 2, rad ? rad + m.sw : 0);
@@ -1611,6 +1625,15 @@ export function itemsOf(ctx, state, W, H) {
   (L.xbadges || []).forEach((b, k) => out.push({ id: `eb:${b.id}`, kind: 'badge', label: `Badge ${k + (L.wm.image ? 2 : 1)}` }));
   (L.drawings || []).forEach((d, k) => out.push({ id: `dr:${d.id}`, kind: 'drawing', label: `Drawing ${k + 1}` }));
   return out;
+}
+
+/** The bold CTA's type colours on this section's ground (as drawCta is given them). */
+export function ctaInk(state) {
+  const bd = byId(state.backdrop);
+  const BARE = bareStyles();
+  const dimmed = state.overlay && state.overlay.style !== 'none' && state.overlay.strength >= 0.35;
+  const ground = dimmed ? 'dark' : (bd.tone || 'dark');
+  return ground === 'dark' ? BARE.onDark : BARE.onLight;
 }
 
 /** Draws only `id` (an id from itemsOf) on a cleared frame. */

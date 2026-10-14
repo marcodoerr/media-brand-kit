@@ -9,7 +9,13 @@
      element            `${sc.id}/${key}`         key: text, badge, inset, bt:<id>, md:<id>, xb:<id>, eb:<id>, dr:<id>
    Flags on every element/section
      locked             sc.locked / sc.locks[key] — a change must leave it as it is
-     generated          sc.auto (Adapt layout) — may be re-made; everything else is the user's
+     generated          sc.auto (Adapt layout) or sc.gen (Slides from text) — may be re-made
+                        while unedited; everything else is the user's
+   Layout format vs export format
+     layout             what the canvas is: 'reel' | 'carousel' | 'presentation' (a Carousel at
+                        16:9 — the same sections, editor and Undo). Stored as contentType + format.
+     exports            files it can be saved as: PowerPoint (.pptx) is an export of a
+                        presentation, never a layout; nothing about it is stored in the project.
      group              item.group — elements that move and export together (data only today)
    History
      Every scoped change goes through the app's own Undo (pushUndo), as one step.
@@ -31,11 +37,13 @@ export function describe(state) {
     }
     return {
       id: sc.id, index: i, role: sc.role, seconds: sc.secs, locked: !!sc.locked,
-      generated: sc.auto ? { by: 'adapt-layout', from: sc.auto.from } : null,
+      generated: sc.auto ? { by: 'adapt-layout', from: sc.auto.from } : sc.gen ? { by: 'slides-from-text', deck: sc.gen.deck || null, part: sc.gen.part || 0 } : null,
       background: sc.bg || null, elements,
     };
   });
-  return { brand: state.brand, contentType: state.contentType, format: state.format, sections };
+  const layout = state.contentType !== 'carousel' ? 'reel' : state.format === '16x9' ? 'presentation' : 'carousel';
+  const exports = layout === 'reel' ? ['video', 'png', 'jpg', 'pdf'] : layout === 'presentation' ? ['png', 'jpg', 'pdf', 'pptx'] : ['png', 'jpg', 'pdf'];
+  return { brand: state.brand, contentType: state.contentType, format: state.format, layout, exports, deck: state.deck ? { id: state.deck.id, slides: state.deck.count } : null, sections };
 }
 
 /**

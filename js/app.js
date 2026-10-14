@@ -3,11 +3,14 @@
    ========================================================================== */
 
 import { wireAppearance } from './v4/appearance.js';
+import { prepareStoryboard, sentencesOf, bodyOf, sepBetween, sourceWords, STORYBOARD_LIMITS } from './v4/storyboard.js';
+import { loadPptxGen, buildPptx, writePptx, fontOf, TEXT_SLACK } from './v4/pptx.js';
 import {
   builtIns, byId, allBackdrops, registerUpload, unregisterUpload,
   OVERLAYS, overlayStyle, DEFAULT_ADJUST, croppable, activeImage, tileScale, motifDefaults, hasBadges, badges, bareStyles, PATTERN_TILE,
   gradId, GRAD_DIRS, colourLuminance, COGENT_DEFAULTS, setAdjustLookup,
 } from './backdrops.js';
+import { buttonPaint, baseTypeSizes, unitOf, ctaInk } from './render.js';
 import { render, renderHooks, layout, safeArea, gridLines, FORMATS, SAFE_TARGETS, setSafeTarget, paintStroke, drawingPoint, strokeWidth, h1ScaleOf, bodyScaleOf, textLook, itemsOf, renderItem, badgeScaleMax, LOWER_DEFAULT, LOWER_STROKE_MAX, lowerColours, UPPER_DEFAULT_TEXT, BADGE_ITEM, MIDDLE_DEFAULT, middleColours, textBadgeImage } from './render.js';
 import { loadAssets, activeBrand, requestHi, onHiRes, hiReady, whenHiReady, C, img as assetImg } from './assets.js';
 import { BRANDS, DEFAULT_BRAND, RETIRED } from './brands.js';
@@ -26,6 +29,16 @@ import { isAvailable as backendReady } from './v4/backend.js';
 
 const $ = (sel) => document.querySelector(sel);
 const STORAGE_KEY = 'askruth.backdrop-studio.v2';
+/* v4.4 · feature flags — all off by default. Turn one on for a visit with ?ff=presentation (or
+   ?ff=presentation,… ), or for this browser with
+   localStorage['askruth.backdrop-studio.flags'] = 'presentation'; ?ff=none switches them all off.
+   aiStoryboard has no implementation in this release and cannot be turned on. */
+const FLAGS = (() => {
+  const on = new Set();
+  try { for (const f of String(localStorage.getItem('askruth.backdrop-studio.flags') || '').split(/[\s,]+/)) if (f) on.add(f); } catch (_) {}
+  try { const q = new URLSearchParams(location.search).get('ff'); if (q === 'none') on.clear(); else if (q) for (const f of q.split(',')) on.add(f.trim()); } catch (_) {}
+  return Object.freeze({ presentation: on.has('presentation'), aiStoryboard: false });
+})();
 watchPersistence(STORAGE_KEY);   // v4: the save status reports what the browser really wrote
 /* v4 · uploads load from IndexedDB in boot(), after the saved design is read. Until then an
    upload id looks unknown, and the start-up healing used to replace it: every reload dropped
@@ -80,9 +93,10 @@ const state = {
   buttons: [],           // buttons on the screen being edited (each screen has its own) — made under Buttons only
   drawings: [],          // v3.1: drawings on the screen being edited (each screen has its own)
   safeFor: 'all',        // v3.1: where a 9:16 will be posted — its safe area (render.js SAFE_TARGETS)
-  // v4.1: a key a design saved before it doesn't have. It must exist (null) so a saved design
-  // restores — snapshot() copies every design key, and an undefined one can't be copied.
+  // v4.1 / v4.4: keys a design saved before them doesn't have. They must exist (null) so a saved
+  // design restores — snapshot() copies every design key, and an undefined one can't be copied.
   captions: null,
+  deck: null,
   blocks: [],            // more header + body blocks on the screen being edited (each screen has its own)
   textMode: 'both',      // Header or Header + body — remembered while the text is switched off
   borders: { h1: { w: 0, c: null }, body: { w: 0, c: null } },   // a line around the text box: width (px at 1080) and colour (null = the text's)
@@ -245,6 +259,7 @@ function starterDesign(id) {
     ],
     scene: 0, sharedBg: null, sharedStill: null, sharedOverlay: null,
     captions: null,
+    deck: null,          // v4.4: slides made from text — the source text, so they can be laid out again
   };
 }
 
@@ -4417,7 +4432,7 @@ function syncFormatTab() {
       for (const k of CONTENT_FORMATS[t] || CONTENT_FORMATS.video) {
         const o = document.createElement('option');
         o.value = `${t}:${k}`;
-        o.textContent = `${SIZE_NAMES[k]} · ${k.replace('x', ':')} · ${FORMATS[k].sub}${t === type ? '' : t === 'carousel' ? ' · as a Carousel' : ' · as a Reel'}`;
+        o.textContent = `${sizeNameOf(k, t)} · ${k.replace('x', ':')} · ${FORMATS[k].sub}${t === type ? '' : t === 'carousel' ? ' · as a Carousel' : ' · as a Reel'}`;
         if (t !== type) o.hidden = true;
         dst.append(o);
       }
@@ -4429,16 +4444,17 @@ function syncFormatTab() {
   if (lab.dataset.sig !== sig) {
     lab.dataset.sig = sig;
     lab.innerHTML = '';
-    const name = document.createElement('span'); name.className = 'fmt-name'; name.textContent = SIZE_NAMES[key] || f.label;
+    const name = document.createElement('span'); name.className = 'fmt-name'; name.textContent = sizeNameOf(key, type) || f.label;
     const ratio = document.createElement('span'); ratio.className = 'fmt-ratio'; ratio.textContent = key.replace('x', ':');
     lab.append(name, ratio);
   }
-  dst.setAttribute('aria-label', `Size: ${SIZE_NAMES[key]} ${key.replace('x', ':')}, ${f.sub} — change`);
+  dst.setAttribute('aria-label', `Size: ${sizeNameOf(key, type)} ${key.replace('x', ':')}, ${f.sub} — change`);
   const wrap = lab.closest('.topbar-format');
-  if (wrap) { wrap.dataset.kind = kind; wrap.title = `Size: ${SIZE_NAMES[key]} ${key.replace('x', ':')} · ${f.sub} · ${f.hint}`; }
+  if (wrap) { wrap.dataset.kind = kind; wrap.title = `Size: ${sizeNameOf(key, type)} ${key.replace('x', ':')} · ${f.sub} · ${f.hint}`; }
   syncContentTabs(type);
 }
 function syncContentTabs(type = state.contentType) {
+  document.documentElement.dataset.content = type === 'carousel' ? 'carousel' : 'video';
   for (const b of document.querySelectorAll('.tb-content-btn')) b.setAttribute('aria-checked', String(b.dataset.type === (type === 'carousel' ? 'carousel' : 'video')));
 }
 /** Reel ⇄ Carousel on the open project: the same sections, the same size. */
@@ -6923,6 +6939,7 @@ function openTemplateDesign() {
     const d = proposalData(r);
     for (const k of DESIGN_KEYS) if (d[k] !== undefined) state[k] = clone(d[k]); if (d.overlays === undefined) state.overlays = [];   // v3.13: a design from before overlay clips has none
   if (d.captions === undefined) state.captions = null;   // v4.1: nor captions
+  if (d.deck === undefined) state.deck = null;           // v4.4: nor slides from text
     state.pristine = true;
     save();
   } catch (e) { console.warn('template', e); }
@@ -7654,7 +7671,7 @@ const DESIGN_KEYS = [
   'brand', 'backdrop', 'format', 'h1', 'body', 'scale', 'h1Scale', 'bodyScale', 'scenes', 'scene', 'sharedBg', 'sharedStill', 'sharedOverlay',
   'visibility', 'textTone', 'badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeUpper', 'badgeMiddle', 'card', 'overlay',
   'adjust', 'inset', 'video', 'pos', 'music', 'textColors', 'cardColors', 'contentType', 'blocks', 'textMode', 'borders', 'buttons', 'media', 'badges',
-  'drawings', 'safeFor', 'badgeShape', 'badgeHalo', 'ctaBox', 'overlays', 'captions',
+  'drawings', 'safeFor', 'badgeShape', 'badgeHalo', 'ctaBox', 'overlays', 'captions', 'deck',
 ];
 
 function loadTemplates() {
@@ -7716,6 +7733,7 @@ async function applyTemplate(entry) {
   unlinkAll(d);                 // Show on is gone: designs saved with links come in unlinked
   for (const k of DESIGN_KEYS) if (d[k] !== undefined) state[k] = clone(d[k]); if (d.overlays === undefined) state.overlays = [];   // v3.13: a design from before overlay clips has none
   if (d.captions === undefined) state.captions = null;   // v4.1: nor captions
+  if (d.deck === undefined) state.deck = null;           // v4.4: nor slides from text
   // templates saved before Header and Body scaled separately carry one `scale`
   state.h1Scale = h1ScaleOf(d);
   state.bodyScale = bodyScaleOf(d);
@@ -9360,9 +9378,11 @@ async function boot() {
     go.textContent = kind === 'video'
       ? `Export ${total.toFixed(1)}s video`
       : kind === 'pdf' ? `Download PDF · ${n} ${n === 1 ? 'page' : 'pages'}`
+      : kind === 'pptx' ? `Download PowerPoint · ${n} ${n === 1 ? 'slide' : 'slides'}`
       : n > 1 ? `Download ${n} ${kind === 'jpg' ? 'JPGs' : 'PNGs'}${zip ? ' as .zip' : ''}` : `Download ${kind === 'jpg' ? 'JPG' : 'PNG'}`;
     $('#sheet-zip-row').hidden = !(n > 1 && (kind === 'png' || kind === 'jpg'));
     $('#pdf-hint').hidden = kind !== 'pdf';
+    const ph = $('#pptx-hint'); if (ph) ph.hidden = kind !== 'pptx';
     go.disabled = kind === 'video' && !pickVideoMime();
     $('#video-hint').textContent = kind === 'video' ? videoHint() : '';
     // the summary above already says what comes out; only the order is spelled out
@@ -9381,6 +9401,10 @@ async function boot() {
     $('#sheet-filetype-row').hidden = false;
     const vb = document.querySelector('#seg-filetype [data-kind="video"]');
     if (vb) vb.hidden = state.contentType === 'carousel';
+    // v4.4 · PowerPoint for a Presentation (flag); anything else falls back to PNG
+    const pb = document.querySelector('#seg-filetype [data-kind="pptx"]');
+    if (pb) pb.hidden = !isPresentation();
+    if (k === 'pptx' && !isPresentation()) { pickKind('png'); return; }
     const vm = pickVideoMime();
     const vs = $('#kind-video-sub'); if (vs) vs.textContent = !vm ? 'Not in this browser' : vm.startsWith('video/mp4') ? 'MP4' : 'WebM';
     $('#sheet-video').hidden = k !== 'video';
@@ -9552,6 +9576,16 @@ async function boot() {
 
   $('#save-go').addEventListener('click', async () => {
     const btn = $('#save-go');
+    if (kind === 'pptx') {
+      btn.disabled = true;
+      btn.textContent = 'Making the PowerPoint…';
+      let ok = false;
+      try { await exportPptx(enabledScenes()); ok = true; }
+      catch (e) { console.error('[pptx]', e); showExportNote('The PowerPoint couldn’t be made in this browser. PNG and PDF still work.'); }
+      finally { btn.disabled = false; syncGo(); }
+      if (ok) close();
+      return;
+    }
     if (kind === 'pdf') {
       btn.disabled = true;
       btn.textContent = 'Making the PDF…';
@@ -13265,7 +13299,7 @@ try {
   sessionStorage.removeItem('askruth.backdrop-studio.start-new');
   if (fresh || state.pristine || !hasContent(snapshot())) { startClean(); launchedClean = true; }
   else restoredOnLoad = true;
-} catch (e) { console.warn("[load] the saved design could not be restored:", e && e.message); startClean(); launchedClean = true; }
+} catch (e) { try { if (localStorage.getItem(STORAGE_KEY)) console.warn("[load] the saved design could not be restored:", e && e.message); } catch (_) {} startClean(); launchedClean = true; }
 // safe-area guides are on by default now; switch them on once for older saves
 try {
   if (!localStorage.getItem('askruth.backdrop-studio.guides-on')) {
@@ -13577,6 +13611,550 @@ function wireHeaderTips() {
   const ex = $('#btn-export'); if (ex) delete ex.dataset.tip;   // it has its word
 }
 
+/* ===== v4.4 · Presentation (16:9), Slides from text, PowerPoint ==================================
+   Behind FLAGS.presentation (off by default; ?ff=presentation turns it on for a visit, see FLAGS).
+   - Presentation is a LAYOUT format: a Carousel at 16:9 (1920 × 1080), the same workspace, slides,
+     editor, Undo and saving. PowerPoint (.pptx) is an EXPORT format, offered for it in Export.
+   - Slides from text: the user's own text → a deterministic storyboard (v4/storyboard.js, no AI)
+     → brand slides laid out by the app's own layout engine → checked → previewed → applied as one
+     Undo step (added after the slides, or replacing them). Nothing is applied automatically.
+   - Fit order: wrap in the region → another template with more room → continuation slides at a
+     paragraph, then a sentence → smaller type, never below DECK.minPx → a clear failure.
+   Geometry is never typed in here: positions come from the brand template and the app's column
+   layout (arrangeColumn / fitLayout) for the canvas size and its safe area. */
+
+/** Layout-specific settings that are NOT brand values (those come from brands.js and the brand
+    template). Inferred defaults, documented here in one place. */
+const DECK = {
+  // starting type scale per slide kind (1 = the brand's own size)
+  scale: { title: { h1: 1.25, body: 1.05 }, point: { h1: 1.1, body: 1.05 }, list: { h1: 1.05, body: 1 }, image: { h1: 1, body: 0.95 }, cta: { h1: 1.15, body: 1 } },
+  // presentation type is read from across a room: it starts larger (the fit steps it down if needed)
+  boost: { '16x9': 1.35 },
+  // which brand template slide each kind starts from (hook = logo + headline, value, cta = button)
+  proto: { title: 'hook', point: 'value', list: 'value', image: 'value', cta: 'cta' },
+  // when a kind doesn't fit: the template with more room it tries next
+  fallback: { title: ['point'], point: [], list: [], image: ['point'], cta: [] },
+  // smallest readable type, as a share of the canvas's short side (1080 → 45 px header, 28 px body)
+  minPx: { h1: 0.042, body: 0.026 },
+  // the most body lines one slide carries before it continues on the next (readability, not room)
+  maxLines: { '16x9': 9, default: 12 },
+  step: 0.06,               // type steps down 6 % at a time
+  logoClear: 0.02,          // clear space round a logo or badge, share of the short side
+  maxSlides: STORYBOARD_LIMITS.maxSlides,
+};
+
+// function declarations (hoisted): the size label is drawn while a saved design loads, long
+// before this part of the file has run
+function isPresentation(st = state) { return FLAGS.presentation && st.contentType === 'carousel' && st.format === '16x9'; }
+function sizeNameOf(k, type) { return FLAGS.presentation && type === 'carousel' && k === '16x9' ? 'Presentation' : SIZE_NAMES[k]; }
+
+const deckId = () => `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+const slideId = () => `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+/** What a generated slide holds — when it changes, the slide counts as edited and is kept. */
+const genSig = (sc) => JSON.stringify([sc.h1 || '', sc.body || '', (sc.buttons || []).map((b) => b.text), (sc.media || []).length, (sc.blocks || []).length, sc.h1Scale, sc.bodyScale]);
+
+/** The brand template's three slides (hook, value, cta), as plain scene objects. */
+function deckProtos(fmt) {
+  const recipe = templateRecipe();
+  if (!recipe) return null;
+  const d = proposalData(recipe, { format: fmt, contentType: 'carousel' });
+  const by = {};
+  for (const sc of d.scenes || []) if (!by[sc.role]) by[sc.role] = sc;
+  return by.hook && by.value && by.cta ? by : null;
+}
+
+/** A slide from a storyboard piece, on the brand template for its kind. */
+function deckSlide(protos, kind, piece, sc0) {
+  const proto = protos[DECK.proto[kind]] || protos.value;
+  const sc = clone(proto);
+  sc.id = slideId();
+  sc.on = true;
+  sc.h1 = piece.heading || '';
+  sc.body = piece.body || '';
+  sc.visibility = 'both';
+  sc.textMode = 'both';
+  sc.h1Scale = sc0.h1;
+  sc.bodyScale = sc0.body;
+  sc.blocks = []; sc.media = []; sc.badges = []; sc.drawings = [];
+  sc.manual = false; sc.locked = false;
+  delete sc.locks; delete sc.edited; delete sc.auto; delete sc.trans;
+  if (kind === 'cta') {
+    const b = (proto.buttons || [])[0];
+    sc.buttons = b && piece.button ? [{ ...clone(b), id: `b${Math.random().toString(36).slice(2, 8)}`, text: piece.button }] : [];
+  } else sc.buttons = [];
+  if (kind === 'image' && piece.image && piece.image.ref && mediaFor(piece.image.ref)) {
+    sc.inset = { id: piece.image.ref, scale: 1, radius: 0.14, hidden: false };
+  } else sc.inset = NO_CARD();
+  sc.bg = null; sc.overlay = null;   // the project's own background, like any new slide
+  return sc;
+}
+
+/** Place slide sc at fmt (the app's column layout), then check it. Runs in a sandbox. */
+function deckPlace(sc, fmt) {
+  return inSandbox(() => {
+    state.scenes = [...clone(state.scenes), sc];
+    const k = state.scenes.length - 1;
+    state.format = fmt;
+    state.scene = k;
+    state.contentType = 'carousel';
+    loadScene(k);
+    const { w: W, h: H } = FORMATS[fmt];
+    state.pos[fmt] = clone((sc.pos && sc.pos[fmt]) || DEFAULT_POS[fmt] || DEFAULT_POS['9x16']);
+    arrangeColumn(W, H, sc.role);
+    fitLayoutRaw(W, H);
+    sc.pos = sc.pos || {};
+    sc.pos[fmt] = clone(state.pos[fmt]);
+    for (const live of state.buttons || []) {
+      const own = (sc.buttons || []).find((x) => x.id === live.id);
+      if (own) { own.x = live.x; own.y = live.y; own.tpl = own.tpl || {}; own.tpl[fmt] = { x: live.x, y: live.y }; own.at = own.at || {}; own.at[fmt] = { x: live.x, y: live.y }; }
+    }
+    return deckCheck(layout(ctx, state, W, H), W, H, fmt);
+  });
+}
+
+/** The checks every generated slide has to pass (calculated geometry; tests also check pixels). */
+function deckCheck(L, W, H, fmt) {
+  const sa = safeArea(fmt, W, H);
+  const short = Math.min(W, H);
+  const issues = [];
+  const tol = 2;
+  const fg = [];
+  const add = (k, r, what) => { if (r && r.w > 0 && r.h > 0) fg.push({ k, r, what }); };
+  add('text', multiRect('text', L), 'Text');
+  for (const x of L.extras || []) add(`xb:${x.id}`, multiRect(`xb:${x.id}`, L), 'Text box');
+  for (const b of L.buttons || []) add(`bt:${b.id}`, { ...b.rect }, 'Button');
+  add('inset', multiRect('inset', L), 'Picture');
+  for (const m of L.media || []) add(`md:${m.id}`, multiRect(`md:${m.id}`, L), 'Picture');
+  add('watermark', multiRect('watermark', L), 'Logo');
+  for (const b of L.xbadges || []) add(`eb:${b.id}`, { ...b.rect }, 'Badge');
+  // inside the safe area
+  for (const o of fg) {
+    if (o.r.x < sa.x - tol || o.r.y < sa.y - tol || o.r.x + o.r.w > sa.x + sa.w + tol || o.r.y + o.r.h > sa.y + sa.h + tol) issues.push({ code: 'bounds', what: o.what });
+  }
+  // no foreground overlaps (a logo also keeps its clear space)
+  const clear = short * DECK.logoClear;
+  for (let a = 0; a < fg.length; a++) for (let b = a + 1; b < fg.length; b++) {
+    const A = fg[a].r, B = fg[b].r;
+    const logo = fg[a].k === 'watermark' || fg[b].k === 'watermark' || fg[a].k.startsWith('eb:') || fg[b].k.startsWith('eb:');
+    const m = logo ? clear : 0;
+    if (A.x < B.x + B.w + m - tol && B.x < A.x + A.w + m - tol && A.y < B.y + B.h + m - tol && B.y < A.y + A.h + m - tol) issues.push({ code: logo ? 'logo-clear' : 'overlap', what: `${fg[a].what} / ${fg[b].what}` });
+  }
+  // every line fits its column (a long link or compound word can't wrap)
+  const tx = L.tx;
+  if (tx && !tx.empty && !tx.cta) {
+    const inner = L.txRect.w - (tx.pad || 0) * 2 + tol;
+    for (const [lines, f, hang] of [[tx.h1Lines, tx.f.h1, tx.h1Hang], [tx.bodyLines, tx.f.body, tx.bodyHang]]) {
+      ctx.font = f.css(f.size);
+      for (const l of lines || []) if (ctx.measureText(l.text).width + (l.hang ? hang : 0) > inner) { issues.push({ code: 'line-too-long', what: l.text.split(/\s+/).sort((x, y) => y.length - x.length)[0] }); break; }
+    }
+    const maxL = DECK.maxLines[fmt] || DECK.maxLines.default;
+    const bodyN = (tx.bodyLines || []).filter((l) => l.text).length;
+    if (bodyN > maxL) issues.push({ code: 'dense', what: `${bodyN} lines`, soft: true });
+    if (tx.h1Lines.length && tx.f.h1.size < short * DECK.minPx.h1 - 0.5) issues.push({ code: 'min-size', what: 'Header' });
+    if (tx.bodyLines.length && tx.f.body.size < short * DECK.minPx.body - 0.5) issues.push({ code: 'min-size', what: 'Body' });
+  }
+  // ok: passes every check · hard: passes every check that is a rule (density is a preference:
+  // it asks for a continuation slide, but smaller type never has to meet it)
+  return { ok: !issues.length, hard: !issues.some((x) => !x.soft), issues, rects: fg.map((o) => ({ k: o.k, ...o.r })), sa };
+}
+
+/** Lowest type scale allowed for this format (so the header/body stay ≥ DECK.minPx). */
+function deckMinScale(fmt) {
+  const { w: W, h: H } = FORMATS[fmt];
+  const S = unitOf(W, H);
+  const f = baseTypeSizes();
+  const short = Math.min(W, H);
+  return { h1: (short * DECK.minPx.h1) / (f.h1 * S), body: (short * DECK.minPx.body) / (f.body * S) };
+}
+
+/** Storyboard → slides that pass every check at fmt, or a clear failure. */
+function planDeck(input, opts = {}) {
+  const fmt = opts.format || state.format;
+  const maxSlides = Math.max(1, Math.min(DECK.maxSlides, opts.maxSlides || DECK.maxSlides));
+  const sb = prepareStoryboard(input, { maxSlides });
+  if (!sb.ok) return { ok: false, error: sb.error, notes: sb.notes, slides: [], reports: [] };
+  commitScene();
+  const protos = deckProtos(fmt);
+  if (!protos) return { ok: false, error: { code: 'no-template', message: 'This brand has no slide template to lay text out on.' }, notes: sb.notes, slides: [], reports: [] };
+  const min = deckMinScale(fmt);
+  const notes = [...sb.notes];
+  const slides = [], reports = [];
+  const boost = DECK.boost[fmt] || 1;
+  const startOf = (kind) => { const s = DECK.scale[kind] || DECK.scale.point; return { h1: s.h1 * boost, body: s.body * boost }; };
+  const tryOne = (kind, piece) => {
+    const s0 = startOf(kind);
+    const sc = deckSlide(protos, kind, piece, s0);
+    return { sc, r: deckPlace(sc, fmt) };
+  };
+  const shrink = (kind, piece) => {
+    const s0 = startOf(kind);
+    for (let k = 1 - DECK.step; ; k -= DECK.step) {
+      const sc0 = { h1: Math.max(min.h1, s0.h1 * k), body: Math.max(min.body, s0.body * k) };
+      const sc = deckSlide(protos, kind, piece, sc0);
+      const r = deckPlace(sc, fmt);
+      if (r.hard) return { sc, r, scale: sc0 };
+      if (sc0.h1 <= min.h1 && sc0.body <= min.body) return { sc, r, fail: true };
+    }
+  };
+  const fits = (kind, piece) => {
+    for (const kd of [kind, ...(DECK.fallback[kind] || [])]) { const t = tryOne(kd, piece); if (t.r.ok) return { ...t, kind: kd }; }
+    return null;
+  };
+  for (const it of sb.items) {
+    const paras = it.paragraphs.slice();
+    const whole = { heading: it.heading, body: bodyOf(paras), button: it.button, image: it.image };
+    // 1 · wrap · 2 · another template
+    let got = fits(it.kind, whole);
+    if (got) { slides.push(markGen(got.sc, it, 0)); reports.push({ src: it.id, kind: got.kind, ...got.r }); continue; }
+    // 3 · continuation slides at paragraphs, then sentences (the heading stays on the first, the button on the last)
+    const units = paras.length > 1 ? paras.map((t, j) => ({ t, sep: j ? sepBetween(paras[j - 1], t) : '' })) : paras.flatMap((p) => sentencesOf(p).map((t, j) => ({ t, sep: j ? ' ' : '' })));
+    const chunks = [];
+    let cur = [];
+    // a continuation slide repeats its heading (the user's own words) so it reads on its own
+    const pieceOf = (us, first, last) => ({ heading: it.heading, body: us.map((u, j) => (j ? u.sep : '') + u.t).join(''), button: last ? it.button : null, image: first ? it.image : null });
+    const kindFor = (first, last) => (last && it.button ? 'cta' : first ? it.kind === 'cta' ? 'point' : it.kind : (it.kind === 'list' ? 'list' : 'point'));
+    let split = units.length > 1;
+    for (let u = 0; split && u < units.length; u++) {
+      const test = [...cur, units[u]];
+      const first = !chunks.length;
+      if (fits(kindFor(first, false), pieceOf(test, first, false))) { cur = test; continue; }
+      if (!cur.length) { split = false; break; }      // one unit alone doesn't fit: smaller type instead
+      chunks.push(cur); cur = [units[u]];
+    }
+    if (split && cur.length) chunks.push(cur);
+    if (split && chunks.length > 1) {
+      // the last chunk carries the button: re-check it with the button, moving units back if needed
+      let okAll = true;
+      const made = [];
+      chunks.forEach((c, j) => {
+        const first = j === 0, last = j === chunks.length - 1;
+        const kd = kindFor(first, last);
+        const g = fits(kd, pieceOf(c, first, last)) || shrink(kd, pieceOf(c, first, last));
+        if (!g || g.fail) okAll = false;
+        made.push({ g, kd, j });
+      });
+      if (okAll) {
+        for (const { g, kd, j } of made) { slides.push(markGen(g.sc, it, j)); reports.push({ src: it.id, kind: g.kind || kd, cont: j > 0, ...g.r }); }
+        notes.push(`“${(it.heading || paras[0] || '').slice(0, 40)}” continues over ${chunks.length} slides.`);
+        continue;
+      }
+    }
+    // 4 · smaller type, within the readable minimum
+    const sh = shrink(it.kind, whole);
+    if (!sh.fail) { slides.push(markGen(sh.sc, it, 0)); reports.push({ src: it.id, kind: it.kind, shrunk: sh.scale, ...sh.r }); continue; }
+    // 5 · it can't be done: say what and where, change nothing
+    const long = sh.r.issues.find((x) => x.code === 'line-too-long');
+    return {
+      ok: false, notes, slides: [], reports,
+      error: { code: long ? 'line-too-long' : 'no-fit', slide: slides.length + 1, message: long
+        ? `Slide ${slides.length + 1}: “${long.what.slice(0, 48)}” is too long for one line at the smallest readable size. Shorten it, or break it with a space.`
+        : `Slide ${slides.length + 1} doesn’t fit even at the smallest readable size. Split its text with a blank line or ---.` },
+    };
+  }
+  if (slides.length > maxSlides) return { ok: false, notes, slides: [], reports, error: { code: 'max-slides', message: `That makes ${slides.length} slides; the limit is ${maxSlides}. Shorten the text or raise the limit in Advanced.` } };
+  // nothing lost: every word of the source, in order
+  const shown = slides.flatMap((sc) => [sc.gen && sc.gen.part > 0 ? '' : sc.h1, sc.body, ...(sc.buttons || []).map((b) => b.text)].map((t) => String(t || '').replace(/^- /gm, '')).join(' ').split(/\s+/).filter(Boolean));
+  const want = sourceWords(sb.items);
+  if (shown.join(' ') !== want.join(' ')) return { ok: false, notes, slides: [], reports, error: { code: 'content', message: 'Some text would have been lost laying this out, so nothing was changed.' } };
+  // every other carousel size gets its own placement too (the slides follow a size change)
+  for (const sc of slides) for (const f of CONTENT_FORMATS.carousel) if (f !== fmt) deckPlace(sc, f);
+  for (const sc of slides) deckPlace(sc, fmt);
+  for (const sc of slides) sc.gen.sig = genSig(sc);
+  return { ok: true, format: fmt, slides, reports, notes, storyboard: sb.items, input: typeof input === 'string' ? input : JSON.stringify(input) };
+}
+function markGen(sc, it, part) { sc.gen = { src: it.id, part, kind: it.kind }; return sc; }
+
+/** Apply a plan as ONE Undo step: added after the slides, or replacing them (Undo brings them back). */
+function applyDeck(plan, mode = 'add') {
+  if (!plan || !plan.ok || !plan.slides.length) return false;
+  stopPlayback();
+  if (editor) closeEditor(true);
+  dropMulti();
+  commitScene();
+  pushUndo('Slides from text');
+  const id = deckId();
+  const slides = plan.slides.map((sc) => { const c = clone(sc); c.gen = { ...c.gen, deck: id }; return c; });
+  let at;
+  if (mode === 'replace') {
+    // the first slide becomes the base: the project's shared background stays the background
+    state.scenes = slides;
+    at = 0;
+  } else if (mode === 'regen') {
+    // the slides made from text before, unless edited since, are replaced in place
+    const keep = state.scenes.filter((sc) => !(sc.gen && sc.gen.deck === (state.deck && state.deck.id) && sc.gen.sig === genSig(sc)));
+    at = Math.max(0, state.scenes.findIndex((sc) => sc.gen && sc.gen.deck === (state.deck && state.deck.id)));
+    const before = keep.slice(0, Math.min(at, keep.length));
+    state.scenes = [...before, ...slides, ...keep.slice(before.length)];
+  } else {
+    at = state.scenes.length;
+    state.scenes = [...state.scenes, ...slides];
+  }
+  state.deck = { v: 1, id, input: plan.input, format: plan.format, made: Date.now(), count: slides.length };
+  if (state.contentType !== 'carousel') setContentType('carousel');
+  state.scene = Math.min(at, state.scenes.length - 1);
+  loadScene(state.scene);
+  try { autoTimes(); } catch (_) {}
+  save();
+  renderScenes();
+  syncSectionValues(true);
+  draw();
+  showToast(`${slides.length} ${slides.length === 1 ? 'slide' : 'slides'} from your text`, 'Undo', undoLast, 8000);
+  return true;
+}
+
+/** Small previews of planned slides, drawn by the app's renderer (in a sandbox). */
+function deckThumbs(plan, w = 160) {
+  const { w: W, h: H } = FORMATS[plan.format];
+  const h = Math.round((w * H) / W);
+  return inSandbox(() => {
+    const base = clone(state.scenes);
+    state.format = plan.format;
+    return plan.slides.map((sc) => {
+      state.scenes = [...base, clone(sc)];
+      const k = state.scenes.length - 1;
+      state.scene = k;
+      loadScene(k);
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      render(cv.getContext('2d'), w, h, state, {});
+      return cv.toDataURL('image/png');
+    });
+  });
+}
+
+/* --- the dialog: one action, content first, defaults, Advanced folded away --------------------- */
+let deckPop = null, deckPlan = null;
+function openDeck() {
+  if (!FLAGS.presentation) return;
+  if (!deckPop) {
+    deckPop = document.createElement('div');
+    deckPop.className = 'save-pop deck-pop';
+    deckPop.id = 'deck-pop';
+    deckPop.setAttribute('role', 'dialog');
+    deckPop.setAttribute('aria-modal', 'true');
+    deckPop.setAttribute('aria-labelledby', 'deck-title');
+    deckPop.hidden = true;
+    deckPop.innerHTML = `
+      <h2 class="save-pop-title" id="deck-title">Slides from text</h2>
+      <p class="save-pop-sub" id="deck-sub"></p>
+      <label class="deck-label" for="deck-text">Your text</label>
+      <textarea id="deck-text" rows="9" spellcheck="true" placeholder="# A heading starts a slide&#10;A paragraph under it.&#10;&#10;---&#10;## Next slide&#10;- A list item&#10;- Another&#10;&#10;## Get in touch&#10;Button: Book a call"></textarea>
+      <details class="deck-adv" id="deck-adv"><summary>Advanced</summary>
+        <label class="deck-row">Most slides <input type="number" id="deck-max" min="1" max="${DECK.maxSlides}" value="${DECK.maxSlides}"></label>
+        <p class="micro">Headings (#), lines of --- and “Button: …” shape the slides. Your words are kept exactly; nothing is written for you.</p>
+      </details>
+      <div class="deck-preview" id="deck-preview" aria-live="polite"></div>
+      <p class="upload-error" id="deck-error" hidden></p>
+      <ul class="deck-notes" id="deck-notes"></ul>
+      <div class="deck-mode" id="deck-mode" role="radiogroup" aria-label="Where the slides go"></div>
+      <div class="save-pop-actions">
+        <button class="link-btn" id="deck-cancel" type="button">Cancel</button>
+        <span class="deck-acts"><button class="btn" id="deck-go-preview" type="button">Preview</button>
+        <button class="btn btn-primary" id="deck-apply" type="button" disabled>Add slides</button></span>
+      </div>`;
+    const scrim = document.createElement('div');
+    scrim.className = 'burger-scrim'; scrim.id = 'deck-scrim'; scrim.hidden = true;
+    document.body.append(scrim, deckPop);
+    scrim.addEventListener('click', closeDeck);
+    deckPop.querySelector('#deck-cancel').addEventListener('click', closeDeck);
+    deckPop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeDeck(); } });
+    deckPop.querySelector('#deck-go-preview').addEventListener('click', previewDeck);
+    deckPop.querySelector('#deck-text').addEventListener('input', () => { deckPlan = null; syncDeck(); });
+    deckPop.querySelector('#deck-apply').addEventListener('click', () => {
+      if (!deckPlan || !deckPlan.ok) return;
+      const mode = (deckPop.querySelector('#deck-mode input:checked') || {}).value || 'add';
+      const plan = deckPlan;
+      closeDeck();
+      applyDeck(plan, mode);
+    });
+  }
+  const ta = deckPop.querySelector('#deck-text');
+  if (!ta.value && state.deck && state.deck.input) ta.value = state.deck.input;
+  deckPlan = null;
+  syncDeck();
+  deckPop.hidden = false;
+  $('#deck-scrim').hidden = false;
+  ta.focus({ preventScroll: true });
+}
+function closeDeck() {
+  if (!deckPop || deckPop.hidden) return;
+  deckPop.hidden = true;
+  $('#deck-scrim').hidden = true;
+}
+function syncDeck() {
+  const fmt = state.format;
+  const name = `${sizeNameOf(fmt, 'carousel')} ${fmt.replace('x', ':')}`;
+  deckPop.querySelector('#deck-sub').textContent = `${activeBrand().name} · ${name} · ${FORMATS[fmt].sub}. You see the slides before anything changes.`;
+  const prev = deckPop.querySelector('#deck-preview');
+  const err = deckPop.querySelector('#deck-error');
+  const notes = deckPop.querySelector('#deck-notes');
+  const apply = deckPop.querySelector('#deck-apply');
+  const modes = deckPop.querySelector('#deck-mode');
+  if (!deckPlan) { prev.innerHTML = ''; err.hidden = true; notes.innerHTML = ''; modes.innerHTML = ''; apply.disabled = true; apply.textContent = 'Add slides'; return; }
+  if (!deckPlan.ok) {
+    prev.innerHTML = '';
+    err.textContent = deckPlan.error.message; err.hidden = false;
+    modes.innerHTML = ''; apply.disabled = true;
+  } else {
+    err.hidden = true;
+    prev.innerHTML = `<p class="deck-count">${deckPlan.slides.length} ${deckPlan.slides.length === 1 ? 'slide' : 'slides'}</p>`;
+    const strip = document.createElement('div'); strip.className = 'deck-strip';
+    deckThumbs(deckPlan).forEach((url, k) => { const f = document.createElement('figure'); f.innerHTML = `<img alt="Slide ${k + 1}" src="${url}"><figcaption>${k + 1}</figcaption>`; strip.append(f); });
+    prev.append(strip);
+    const regenN = state.deck ? state.scenes.filter((sc) => sc.gen && sc.gen.deck === state.deck.id).length : 0;
+    const opts = [['add', `Add after the ${state.scenes.length} ${state.scenes.length === 1 ? 'slide' : 'slides'} there`]];
+    if (regenN) opts.push(['regen', `Replace the ${regenN} made from text before (edited ones stay)`]);
+    opts.push(['replace', 'Replace all slides (Undo brings them back)']);
+    modes.innerHTML = '';
+    opts.forEach(([v, label], k) => { const l = document.createElement('label'); l.className = 'deck-opt'; l.innerHTML = `<input type="radio" name="deck-mode" value="${v}"${k === 0 ? ' checked' : ''}> <span>${label}</span>`; modes.append(l); });
+    apply.disabled = false;
+    apply.textContent = `Add ${deckPlan.slides.length} ${deckPlan.slides.length === 1 ? 'slide' : 'slides'}`;
+  }
+  notes.innerHTML = '';
+  for (const n of deckPlan.notes || []) { const li = document.createElement('li'); li.textContent = n; notes.append(li); }
+}
+function previewDeck() {
+  const ta = deckPop.querySelector('#deck-text');
+  const max = Number(deckPop.querySelector('#deck-max').value) || DECK.maxSlides;
+  try { deckPlan = planDeck(ta.value, { maxSlides: max }); }
+  catch (e) { console.error('[deck]', e); deckPlan = { ok: false, error: { code: 'internal', message: 'These slides couldn’t be laid out. Nothing was changed.' }, notes: [] }; }
+  syncDeck();
+}
+
+/* --- PowerPoint: the slides' resolved layout → editable .pptx (v4/pptx.js) --------------------- */
+function rasterItem(i, id, W, H, type = 'image/png') {
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  withSection(i, () => renderItem(cv.getContext('2d'), W, H, state, id));
+  if (id === 'background') return { x: 0, y: 0, w: W, h: H, data: cv.toDataURL('image/jpeg', 0.92) };
+  const b = inkBox(cv);
+  if (!b) return null;
+  const out = document.createElement('canvas');
+  out.width = b.w; out.height = b.h;
+  out.getContext('2d').drawImage(cv, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+  return { ...b, data: out.toDataURL(type) };
+}
+/** Canvas lines → PowerPoint paragraphs: a bullet starts one; wrapped lines are soft breaks. */
+function parasOf(lines) {
+  const out = [];
+  for (const l of lines) {
+    if (!out.length || l.bullet || (!l.hang && out[out.length - 1].bullet)) out.push({ lines: [], bullet: !!l.bullet });
+    out[out.length - 1].lines.push(l.text);
+  }
+  return out;
+}
+function textItems(tx, R, colours, S, name) {
+  const out = [];
+  const look = tx.look;
+  const brd = tx.brd || { h1: { w: 0 }, body: { w: 0 } };
+  const lead = tx.h1Lines.length ? 'h1' : 'body';
+  const card = look[lead] && look[lead].bg;
+  const border = brd[lead] && brd[lead].w > 0 ? brd[lead] : null;
+  if (card || border) {
+    const i = border ? border.w / 2 : 0;
+    out.push({ type: 'shape', name: `${name} card`, x: R.x - i, y: R.y - i, w: R.w + i * 2, h: tx.h + i * 2, radius: 36 * S + i, fill: card || null, line: border ? { colour: border.c, w: border.w } : null });
+  }
+  const part = (lines, f, top, dy, pad, colour, hang, w, h, nm) => {
+    if (!lines.length) return;
+    const { face, bold } = fontOf(f.css(f.size));
+    out.push({ type: 'text', name: nm, x: R.x + pad, y: R.y + top + (dy || 0), w: Math.min(R.w - pad, w * TEXT_SLACK + hang), h, paras: parasOf(lines).map((p) => ({ ...p, indent: hang })),
+      size: f.size, face, bold, colour, lineHeight: f.lh, lineSpacingPx: f.size * f.lh });
+  };
+  part(tx.h1Lines, tx.f.h1, tx.h1Top, tx.h1Dy, tx.padH1, colours.h1, tx.h1Lines.some((l) => l.hang) ? tx.h1Hang : 0, tx.h1W, tx.h1H, `${name} header`);
+  part(tx.bodyLines, tx.f.body, tx.bodyTop, tx.bodyDy, tx.padBody, colours.body, tx.bodyLines.some((l) => l.hang) ? tx.bodyHang : 0, tx.bodyW, tx.bodyH, `${name} body`);
+  return out;
+}
+/** A bold CTA (big action line, then its supporting line): native text, its box a shape. */
+function ctaItems(tx, R, colours) {
+  const out = [];
+  const p = tx.pad || 0;
+  const ink = tx.boxBg ? tx.boxInk : colours;
+  if (tx.boxBg) out.push({ type: 'shape', name: 'CTA box', x: R.x, y: R.y, w: R.w, h: tx.h, radius: 36 * (p / 32), fill: tx.boxBg });
+  const one = (lines, f, y, colour, nm) => {
+    if (!lines.length) return;
+    const { face, bold } = fontOf(f.css(f.size));
+    const w = Math.max(...lines.map((l) => { ctx.font = f.css(f.size); return ctx.measureText(l.text).width; }));
+    out.push({ type: 'text', name: nm, x: R.x + p, y, w: Math.min(R.w - p, w * TEXT_SLACK), h: lines.length * f.size * f.lh, paras: [{ lines: lines.map((l) => l.text), bullet: false }],
+      size: f.size, face, bold, colour, lineSpacingPx: f.size * f.lh });
+  };
+  one(tx.big, tx.f, R.y + p, ink.h1, 'CTA action');
+  if (tx.lines.length) one(tx.lines, tx.body, R.y + p + tx.bigH + (tx.bigH ? tx.gap : 0), ink.body, 'CTA line');
+  return out;
+}
+/** The deck description for v4/pptx.js: per slide, its items in drawing order, in canvas px. */
+async function pptxDeckOf(list = enabledScenes()) {
+  commitScene();
+  const f = FORMATS[state.format];
+  const W = f.w, H = f.h;
+  const slides = [];
+  const rasters = [];
+  for (const { i } of list) await masters(i);
+  try { await document.fonts.ready; } catch (_) {}
+  for (const { sc, i } of list) {
+    const items = [];
+    const R = (id, name) => { const r = rasterItem(i, id, W, H); if (r) { items.push({ type: 'image', name, ...r }); rasters.push(name); } };
+    R('background', 'Background');
+    const L = withSection(i, () => layout(ctx, state, W, H));
+    const bd = withSection(i, () => ({ base: (state.adjust && state.adjust[state.backdrop] && state.adjust[state.backdrop].ground) || byId(state.backdrop).base, look: textLook(state, byId(state.backdrop)) }));
+    if (L.ins.image) R('inset', 'Picture');
+    for (const m of L.media || []) R(`md:${m.id}`, 'Picture');
+    if (!L.tx.empty) {
+      if (L.tx.cta === 'bold') items.push(...ctaItems(L.tx, L.txRect, withSection(i, () => ctaInk(state))));
+      else if (L.tx.cta) R('text', 'CTA lettering');
+      else items.push(...textItems(L.tx, L.txRect, { h1: (L.tx.look || bd.look).h1.text, body: (L.tx.look || bd.look).body.text }, L.S, 'Text'));
+    }
+    (L.extras || []).forEach((x, k) => {
+      const look = x.tx.look || L.tx.look || bd.look;
+      items.push(...textItems(x.tx, x.txRect, { h1: look.h1.text, body: look.body.text }, L.S, `Text box ${k + 2}`));
+    });
+    for (const b of L.buttons || []) {
+      if (b.m.lux) { R(`bt:${b.id}`, `Button · ${b.m.text}`); continue; }
+      const p = buttonPaint(b, bd.base);
+      if (p.stroke && p.sw) items.push({ type: 'shape', name: `Button edge · ${b.m.text}`, x: b.rect.x - p.sw, y: b.rect.y - p.sw, w: b.m.bw + p.sw * 2, h: b.m.bh + p.sw * 2, radius: p.rad ? p.rad + p.sw : 0, fill: p.stroke });
+      items.push({ type: 'shape', name: `Button · ${b.m.text}`, x: b.rect.x, y: b.rect.y, w: b.m.bw, h: b.m.bh, radius: p.rad, fill: p.fill });
+      const { face, bold } = fontOf(b.m.css(b.m.fs));
+      items.push({ type: 'text', name: `Button label · ${b.m.text}`, x: b.rect.x, y: b.rect.y, w: b.m.bw, h: b.m.bh, paras: [{ lines: [b.m.text], bullet: false }], size: b.m.fs, face, bold, colour: p.ink, lineHeight: 1.1, lineSpacingPx: b.m.fs * 1.1, align: 'center', valign: 'middle' });
+    }
+    if (L.wm.image) R('badge', 'Logo');
+    (L.xbadges || []).forEach((b, k) => R(`eb:${b.id}`, `Badge ${k + 2}`));
+    (L.drawings || []).forEach((d, k) => R(`dr:${d.id}`, `Drawing ${k + 1}`));
+    slides.push({ items, name: sceneName(sc, i) });
+  }
+  mastersBack();
+  return { W, H, title: titleOf(state), author: activeBrand().name, slides, rasters };
+}
+async function exportPptx(list = enabledScenes()) {
+  const deck = await pptxDeckOf(list);
+  const Pptx = await loadPptxGen();
+  const pptx = await buildPptx(Pptx, deck);
+  const blob = await writePptx(pptx, 'blob');
+  const name = `${exportSlug()}-${deck.slides.length}-slides.pptx`;
+  downloadBlob(blob, name);
+  return { name, slides: deck.slides.length, bytes: blob.size };
+}
+
+
+const u8ToB64 = (u8) => { let s = ''; for (let k = 0; k < u8.length; k += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(k, k + 0x8000)); return btoa(s); };
+function wireDeck() {
+  if (!FLAGS.presentation) return;
+  document.documentElement.dataset.ff = 'presentation';
+  const after = $('#adapt-btn') || $('#tidy-btn');
+  if (after && !$('#deck-btn')) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tidy-btn deck-btn'; b.id = 'deck-btn';
+    b.innerHTML = '<span class="tidy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M7 9h7M7 12.5h10M9 20h6"/></svg></span><span>Slides from text<small>Paste your text · see the slides before anything changes</small></span>';
+    after.after(b);
+    b.addEventListener('click', () => openDeck());
+  }
+  if (new URLSearchParams(location.search).has('debug')) window.__deck = { flags: FLAGS, plan: (t, o) => planDeck(t, o), apply: (p, m) => applyDeck(p, m), open: openDeck, deckOf: () => pptxDeckOf(), exportPptx: () => exportPptx(), storyboard: (t) => prepareStoryboard(t), config: DECK,
+    // for tools/deck (the command-line renderer): numbered PNGs, the .pptx and the resolved geometry
+    pngs: async (scale = 1) => { const files = []; for (const { i } of enabledScenes()) await masters(i); await exportSlides('image/png', scale, files); mastersBack(); return files.map((f) => ({ name: f.name, w: f.w, h: f.h, b64: u8ToB64(f.data) })); },
+    pptx: async () => { const d = await pptxDeckOf(); const P = await loadPptxGen(); const p = await buildPptx(P, d); return { b64: await writePptx(p, 'base64'), slides: d.slides.length, rasters: d.rasters }; },
+    geometry: async () => { const d = await pptxDeckOf(); return { ...d, slides: d.slides.map((sl) => ({ ...sl, items: sl.items.map(({ data, ...it }) => it) })) }; },
+    ink: (i, id) => { const cv = itemCanvas(i, id, 1, true); return cv ? inkBox(cv) : null; },
+    check: () => { const f = FORMATS[state.format]; return deckCheck(layout(ctx, state, f.w, f.h), f.w, f.h, state.format); } };
+}
+
 let v4Wired = false;
 function wireV4() {
   if (v4Wired) return;
@@ -13592,6 +14170,7 @@ function wireV4() {
   wireHeaderTips();
   wireCaptions();
   wireV4Adapt();
+  wireDeck();
   if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence, model: () => describeProject(state), scoped: (scope, label, fn) => scopedChange({ state: () => state, pushUndo, commitScene, save, draw, renderScenes }, scope, label, fn), plan: (f) => planAdapt(f), apply: (f) => applyAdapt(planAdapt(f), f || state.format) };
   // a background that can't be painted: the base colour stands in (render.js) and we say so once
   let told = 0;

@@ -1033,6 +1033,7 @@
           <button type="button" role="radio" data-kind="png" aria-checked="true">PNG<small>Sharpest</small></button>
           <button type="button" role="radio" data-kind="jpg" aria-checked="false">JPG<small>Smaller files</small></button>
           <button type="button" role="radio" data-kind="pdf" aria-checked="false">PDF<small>One page each</small></button>
+          <button type="button" role="radio" data-kind="pptx" aria-checked="false" hidden>PowerPoint<small>Editable text</small></button>
         </div>
       </div>
       <label class="switch" id="sheet-zip-row" hidden>
@@ -1040,6 +1041,7 @@
         <span class="track" aria-hidden="true"></span>
         <span>Package as one .zip <small class="switch-sub">numbered in order; off = separate downloads</small></span>
       </label>
+      <p class="micro" id="pptx-hint" hidden>An editable PowerPoint (.pptx): headers, body text, text cards and buttons stay editable. The background, logos, pictures, drawings and Luxury buttons are placed as pictures. Fonts are named, not embedded — install the brand fonts for an exact match.</p>
       <p class="micro" id="pdf-hint" hidden>A PDF for sharing or printing: one page per slide, each page a picture of it. Showing it full screen is the Preview button, not this file.</p>
       <span class="lbl lbl-sub">Size</span>
       <div class="segments seg-size" id="seg-size" role="radiogroup" aria-label="Size">

@@ -17,3 +17,10 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+
+# the command-line renderer lives in the repo but is not part of the site
+[[redirects]]
+  from = "/tools/*"
+  to = "/__not-found"
+  status = 404
+  force = true
