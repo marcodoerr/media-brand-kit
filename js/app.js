@@ -18,6 +18,7 @@ import {
 import { installImportGuard, installDecoderBudget, reportUnplayable } from './v4/importer.js';
 import { watchPersistence, installFaultGuard, persistence, onPersistence } from './v4/guard.js';
 import { plan as adaptPlan, isPureAuto } from './v4/adapt.js';
+import { pdfOf } from './v4/pdf.js';
 
 const $ = (sel) => document.querySelector(sel);
 const STORAGE_KEY = 'askruth.backdrop-studio.v2';
@@ -899,7 +900,16 @@ function selectScene(i) {
   panelToTop();
 }
 
-const enabledScenes = () => { ensureScenes(); return state.scenes.map((sc, i) => ({ sc, i })); };
+/* v4 · the export sheet's "What to export": null = every section; otherwise the ids it picked.
+   Set only while the sheet is open, so the timeline and playback always see every section. */
+let exportPick = null;
+const enabledScenes = () => {
+  ensureScenes();
+  const all = state.scenes.map((sc, i) => ({ sc, i }));
+  if (!exportPick) return all;
+  const some = all.filter(({ sc }) => exportPick.has(sc.id));
+  return some.length ? some : all;
+};
 
 /* --- the timeline ------------------------------------------------------------
    Laid out like a video editor: a time ruler, the video track (one clip per
@@ -2034,13 +2044,13 @@ function renderScenesLabels() {
 }
 
 /* Slides: one image per included screen, numbered in order. */
-async function exportSlides(type, scale) {
+async function exportSlides(type, scale, collect) {
   commitScene();
   sequencing = true;
-  try { await slides(type, scale); } finally { sequencing = false; loadScene(state.scene); draw(); }
+  try { await slides(type, scale, collect); } finally { sequencing = false; loadScene(state.scene); draw(); }
 }
 
-async function slides(type, scale) {
+async function slides(type, scale, collect) {
   const list = enabledScenes();
   const f = FORMATS[state.format];
   const ext = type === 'image/png' ? 'png' : 'jpg';
@@ -2056,6 +2066,8 @@ async function slides(type, scale) {
     render(g, cv.width, cv.height, state, {});
     const name = `${exportSlug()}-${String(n + 1).padStart(2, '0')}-${kebab(sceneName(sc, i))}-${cv.width}x${cv.height}.${ext}`;
     const blob = await new Promise((r) => cv.toBlob(r, type, type === 'image/jpeg' ? 0.92 : undefined));
+    // v4: collected for a .zip or a PDF, or downloaded one by one as before
+    if (collect) { collect.push({ name, data: new Uint8Array(await blob.arrayBuffer()), w: cv.width, h: cv.height }); await new Promise((r) => setTimeout(r, 0)); continue; }
     downloadBlob(blob, name);
     // browsers drop downloads fired in the same instant
     await new Promise((r) => setTimeout(r, 350));
@@ -2070,7 +2082,8 @@ async function exportScenesVideo(seconds, scale) {
   if (list.length < 2) {
     // one section: still keep a clock, so overlay clips play at their times
     let t1 = 0;
-    const tk = setInterval(() => { if (!recording) return; if (!t1) t1 = performance.now(); seqClock = (performance.now() - t1) / 1000; }, 15);
+    const base = list[0] ? sceneStart(list[0].i) : 0;   // v4: one section of several starts at its own time
+    const tk = setInterval(() => { if (!recording) return; if (!t1) t1 = performance.now(); seqClock = base + (performance.now() - t1) / 1000; }, 15);
     try { return await exportVideo(seconds, scale); } finally { clearInterval(tk); seqClock = null; }
   }
   // each screen for its own time; the total is the recording length
@@ -2089,7 +2102,9 @@ async function exportScenesVideo(seconds, scale) {
     if (k < 0) k = list.length - 1;
     const want = list[k].i;
     const sc = state.scenes[want];
-    seqClock = el / 1000;
+    // v4: overlay clips and transitions run on the film's clock — the same as el for the whole
+    // film; for some sections, each one's own place on the timeline
+    seqClock = list.length === state.scenes.length ? el / 1000 : sceneStart(want) + (el - (k ? ends[k - 1] : 0)) / 1000;
     if (want !== shown) { snapPrev(shown); shown = want; loadScene(want); }
   }, 15);
   try {
@@ -4385,11 +4400,16 @@ function syncFormatTab() {
   if (dst.dataset.sig !== optSig) {
     dst.dataset.sig = optSig;
     dst.innerHTML = '';
-    for (const k of CONTENT_FORMATS[type] || CONTENT_FORMATS.video) {
-      const o = document.createElement('option');
-      o.value = `${type}:${k}`;
-      o.textContent = `${SIZE_NAMES[k]} · ${k.replace('x', ':')} · ${FORMATS[k].sub}`;
-      dst.append(o);
+    // the open content type's sizes; the other type's are kept (hidden) so a saved or scripted
+    // "carousel:1x1" still selects — picking one switches the content type too
+    for (const t of [type, type === 'carousel' ? 'video' : 'carousel']) {
+      for (const k of CONTENT_FORMATS[t] || CONTENT_FORMATS.video) {
+        const o = document.createElement('option');
+        o.value = `${t}:${k}`;
+        o.textContent = `${SIZE_NAMES[k]} · ${k.replace('x', ':')} · ${FORMATS[k].sub}${t === type ? '' : t === 'carousel' ? ' · as a Carousel' : ' · as a Reel'}`;
+        if (t !== type) o.hidden = true;
+        dst.append(o);
+      }
     }
   }
   dst.value = src.value;
@@ -9302,7 +9322,9 @@ async function boot() {
      Progressive: first the file type, then only that type's options and one
      button that says exactly what will happen. */
   const sheet = $('#sheet');
-  let kind = null;           // 'png' | 'jpg' | 'video'
+  let scope = 'all';         // v4 · 'all' | 'pick' | 'current' | 'elements'
+  const picked = new Set();  // section ids, for 'pick'
+  let kind = null;           // 'png' | 'jpg' | 'video' | 'pdf' (v4)
   let imageKind = 'png';     // a carousel's file type, remembered between exports
   let scale = 1;
   const videoHint = () => {
@@ -9320,9 +9342,13 @@ async function boot() {
     const list = enabledScenes();
     const n = list.length;
     const total = sequenceSecs();
+    const zip = n > 1 && $('#sheet-zip').checked;
     go.textContent = kind === 'video'
       ? `Export ${total.toFixed(1)}s video`
-      : n > 1 ? `Download ${n} ${kind === 'jpg' ? 'JPGs' : 'PNGs'}` : `Download ${kind === 'jpg' ? 'JPG' : 'PNG'}`;
+      : kind === 'pdf' ? `Download PDF · ${n} ${n === 1 ? 'page' : 'pages'}`
+      : n > 1 ? `Download ${n} ${kind === 'jpg' ? 'JPGs' : 'PNGs'}${zip ? ' as .zip' : ''}` : `Download ${kind === 'jpg' ? 'JPG' : 'PNG'}`;
+    $('#sheet-zip-row').hidden = !(n > 1 && (kind === 'png' || kind === 'jpg'));
+    $('#pdf-hint').hidden = kind !== 'pdf';
     go.disabled = kind === 'video' && !pickVideoMime();
     $('#video-hint').textContent = kind === 'video' ? videoHint() : '';
     // the summary above already says what comes out; only the order is spelled out
@@ -9337,7 +9363,12 @@ async function boot() {
     for (const b of document.querySelectorAll('#seg-filetype button')) {
       b.setAttribute('aria-checked', String(b.dataset.kind === k));
     }
-    $('#sheet-filetype-row').hidden = k === 'video';
+    // v4 · one row for every file type: Video only for a Reel; PNG, JPG and PDF for both
+    $('#sheet-filetype-row').hidden = false;
+    const vb = document.querySelector('#seg-filetype [data-kind="video"]');
+    if (vb) vb.hidden = state.contentType === 'carousel';
+    const vm = pickVideoMime();
+    const vs = $('#kind-video-sub'); if (vs) vs.textContent = !vm ? 'Not in this browser' : vm.startsWith('video/mp4') ? 'MP4' : 'WebM';
     $('#sheet-video').hidden = k !== 'video';
     $('#sheet-mute-row').hidden = !primaryVideoId();
     $('#sheet-mute').checked = state.video.muted;
@@ -9358,7 +9389,7 @@ async function boot() {
     const f = FORMATS[state.format];
     const list = enabledScenes();
     const video = state.contentType !== 'carousel';
-    $('#sheet-title').textContent = video ? 'Export video' : (list.length > 1 ? 'Export carousel' : 'Export image');
+    $('#sheet-title').textContent = 'Export';
     $('#sheet-type').textContent = video ? 'Video' : 'Carousel';
     const facts = [f.label, `${f.w} × ${f.h}`];
     if (video) {
@@ -9371,30 +9402,119 @@ async function boot() {
     // the screens, as they will come out
     const host = $('#sheet-thumbs');
     host.innerHTML = '';
-    for (const { sc, i } of list) {
+    // v4 · Choose: every section shows; tap to include or leave out
+    const shown = scope === 'pick' ? state.scenes.map((sc, i) => ({ sc, i })) : list;
+    host.setAttribute('aria-hidden', String(scope !== 'pick'));
+    host.classList.toggle('is-pick', scope === 'pick');
+    for (const { sc, i } of shown) {
       const { url } = frameImage(i, 84);
-      const fig = document.createElement('figure');
+      const fig = document.createElement(scope === 'pick' ? 'button' : 'figure');
       const im = document.createElement('img');
       im.src = url;
       im.alt = '';
       const cap = document.createElement('figcaption');
       cap.textContent = video ? `${sc.secs.toFixed(1)}s` : String(list.findIndex((x) => x.i === i) + 1);
       fig.append(im, cap);
+      if (scope === 'pick') {
+        const on = picked.has(sc.id);
+        fig.type = 'button';
+        fig.className = 'sheet-pick' + (on ? ' is-on' : '');
+        fig.setAttribute('aria-pressed', String(on));
+        fig.setAttribute('aria-label', `${sceneName(sc, i)}: ${on ? 'included' : 'left out'}`);
+        cap.textContent = sceneName(sc, i);
+        fig.addEventListener('click', () => {
+          if (on && picked.size === 1) { showExportNote('Keep at least one section in the export.'); return; }
+          if (on) picked.delete(sc.id); else picked.add(sc.id);
+          exportPick = new Set(picked);
+          showExportNote('');
+          summarise(); syncGo();
+        });
+      }
       host.append(fig);
     }
+    const subs = { all: `${state.scenes.length} ${video ? 'sections' : 'slides'}`, pick: scope === 'pick' ? `${picked.size} of ${state.scenes.length}` : 'Tap to include', current: sceneName(state.scenes[state.scene], state.scene), elements: (() => { const n = selectedElementIds().length; return n ? `${n} selected` : 'Pick on the canvas'; })() };
+    for (const [k, v] of Object.entries(subs)) { const el = $(`#scope-${k === 'current' ? 'cur' : k === 'elements' ? 'el' : k}-sub`); if (el) el.textContent = v; }
   };
   const open = () => {
     const f = FORMATS[state.format];
     $('#size-1').textContent = `${f.w} × ${f.h}`;
     $('#size-2').textContent = `${f.w * 2} × ${f.h * 2}`;
     commitScene();
-    summarise();
+    picked.clear(); for (const sc of state.scenes) picked.add(sc.id);
+    pickScope(selectedElementIds().length > 1 ? 'elements' : 'all', true);
     pickScale(scale);
-    pickKind(state.contentType === 'carousel' ? imageKind : 'video');
+    pickKind(state.contentType === 'carousel' ? (imageKind === 'video' ? 'png' : imageKind) : 'video');
     showExportNote('');
     sheet.hidden = false;
   };
-  const close = () => { sheet.hidden = true; };
+  const close = () => { sheet.hidden = true; exportPick = null; };
+  /* v4 · What to export */
+  function pickScope(sc, quiet) {
+    scope = sc;
+    for (const b of document.querySelectorAll('#seg-scope button')) b.setAttribute('aria-checked', String(b.dataset.scope === sc));
+    exportPick = sc === 'all' || sc === 'elements' ? null : sc === 'current' ? new Set([state.scenes[state.scene].id]) : new Set(picked);
+    const el = sc === 'elements';
+    $('#sheet-options').hidden = el;
+    $('#sheet-items').hidden = el;
+    $('#sheet-summary').hidden = el;
+    $('#sheet-sel').hidden = !el;
+    if (el) renderSelList();
+    summarise();
+    if (!quiet) syncGo();
+  }
+  for (const b of document.querySelectorAll('#seg-scope button')) b.addEventListener('click', () => { pickScope(b.dataset.scope); if (scope !== 'elements') pickKind(kind); });
+  $('#sheet-zip').addEventListener('change', syncGo);
+  // Elements: what's selected on the canvas, ticked; anything else on this section can be ticked too
+  const selChosen = new Set();
+  function renderSelList() {
+    const host = $('#sel-list');
+    host.innerHTML = '';
+    const i = state.scene;
+    const items = sectionItems(i);
+    selChosen.clear(); for (const id of selectedElementIds()) selChosen.add(id);
+    $('#sel-sum').textContent = selChosen.size
+      ? `${selChosen.size} selected on ${sceneName(state.scenes[i], i)}. Tick more, or untick.`
+      : `Nothing selected on the canvas. Tick what to export from ${sceneName(state.scenes[i], i)} (or Shift-click items on the canvas first).`;
+    for (const it of items) {
+      const l = document.createElement('label');
+      l.className = 'item-row sel-row';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = selChosen.has(it.id);
+      cb.addEventListener('change', () => { if (cb.checked) selChosen.add(it.id); else selChosen.delete(it.id); syncSelGo(); });
+      const prev = document.createElement('span');
+      prev.className = 'item-thumb' + (it.id === 'background' ? ' is-bg' : '');
+      const cv = itemCanvas(i, it.id, 0.12, false);
+      if (cv) prev.style.setProperty('--img', `url(${cv.toDataURL('image/png')})`);
+      const name = document.createElement('span'); name.className = 'item-name'; name.textContent = it.label;
+      l.append(cb, prev, name);
+      host.append(l);
+    }
+    syncSelGo();
+  }
+  function syncSelGo() {
+    const n = selChosen.size, go = $('#sel-go');
+    go.disabled = !n;
+    go.textContent = !n ? 'Tick an element first' : n === 1 ? 'Download PNG' : `Download ${n} PNGs as .zip`;
+  }
+  $('#sel-go').addEventListener('click', async () => {
+    const i = state.scene, go = $('#sel-go');
+    const items = sectionItems(i).filter((it) => selChosen.has(it.id));
+    if (!items.length) return;
+    go.disabled = true; go.textContent = 'Saving…';
+    try {
+      await masters(i);
+      const full = $('#sel-full').checked;
+      const files = [];
+      for (const it of items) {
+        const cv = itemCanvas(i, it.id, scale, full);
+        if (!cv) continue;
+        const blob = await toPng(cv);
+        if (items.length === 1) { downloadBlob(blob, itemFileName(i, it, cv)); continue; }
+        files.push({ name: itemFileName(i, it, cv), data: new Uint8Array(await blob.arrayBuffer()) });
+      }
+      if (files.length) downloadBlob(zipOf(files), `${exportSlug()}-${kebabOf(sceneName(state.scenes[i], i))}-elements.zip`);
+      close();
+    } finally { mastersBack(); go.disabled = false; syncSelGo(); }
+  });
   $('#btn-export').addEventListener('click', open);
   $('#sheet-close').addEventListener('click', close);
   sheet.addEventListener('click', (e) => { if (e.target === sheet) close(); });
@@ -9417,9 +9537,31 @@ async function boot() {
 
   $('#save-go').addEventListener('click', async () => {
     const btn = $('#save-go');
+    if (kind === 'pdf') {
+      btn.disabled = true;
+      btn.textContent = 'Making the PDF…';
+      try {
+        const pages = [];
+        for (const { i } of enabledScenes()) await masters(i);
+        await exportSlides('image/jpeg', scale, pages);
+        mastersBack();
+        downloadBlob(pdfOf(pages.map((p) => ({ jpeg: p.data, w: p.w, h: p.h })), { title: titleOf(state), author: activeBrand().name }), `${exportSlug()}-${pages.length}-pages.pdf`);
+      } finally { btn.disabled = false; syncGo(); }
+      close();
+      return;
+    }
     if (kind === 'png' || kind === 'jpg') {
       const type = kind === 'png' ? 'image/png' : 'image/jpeg';
-      if (enabledScenes().length > 1) {
+      const list = enabledScenes();
+      if (list.length > 1 && $('#sheet-zip').checked) {
+        btn.disabled = true;
+        btn.textContent = 'Saving…';
+        try {
+          const files = [];
+          await exportSlides(type, scale, files);
+          downloadBlob(zipOf(files), `${exportSlug()}-${files.length}-${state.contentType === 'carousel' ? 'slides' : 'sections'}.zip`);
+        } finally { btn.disabled = false; syncGo(); }
+      } else if (list.length > 1 || (list[0] && list[0].i !== state.scene)) {
         btn.disabled = true;
         btn.textContent = 'Saving…';
         try { await exportSlides(type, scale); } finally { btn.disabled = false; }
@@ -13424,9 +13566,7 @@ function openAdapt(p = planAdapt()) {
   const fmt = state.format;
   if (!p.ops.length) {
     const locked = state.scenes.filter((x) => x.locked).length;
-    const locked = state.scenes.filter((x) => x.locked).length;
     const why = p.notes.length ? ` (${p.notes.length} ${unitWord(p.notes.length)} can’t be split: one paragraph, a Hook, a CTA or locked)`
-      : locked ? ` (${locked} locked ${unitWord(locked)} left as ${locked > 1 ? 'they are' : 'it is'})` : '';
       : locked ? ` (${locked} locked ${unitWord(locked)} left as ${locked > 1 ? 'they are' : 'it is'})` : '';
     showToast(`Everything already fits ${SIZE_NAMES[fmt]} ${fmt.replace('x', ':')} at its size${why}. Nothing to change.`, null, null, 6000);
     return;
@@ -13521,4 +13661,22 @@ function wireV4Adapt() {
       showToast('Locked in place · right-click or long-press it to unlock', null, null, 3500);
     }
   }, true);
+}
+
+/* v4 · the elements selected on the canvas, as Export names them (itemsOf ids). Pressing Export
+   ends a multi-selection (a tap outside the canvas), so it is read as Export is pressed. */
+let selAtExport = null;
+window.addEventListener('pointerdown', (e) => {   // window, capture: before the tap-outside that ends a selection
+  if (!e.target.closest || !e.target.closest('#btn-export, #fs-export')) return;
+  selAtExport = { t: Date.now(), sigs: multiSel.length > 1 ? [...multiSel] : selected && selected !== 'background' ? [selected] : [] };
+}, true);
+function selectedElementIds() {
+  const fresh = selAtExport && Date.now() - selAtExport.t < 4000;
+  const sigs = fresh ? selAtExport.sigs : multiSel.length > 1 ? multiSel : selected && selected !== 'background' ? [selected] : [];
+  const out = [];
+  for (const sg of sigs) {
+    const id = sg === 'watermark' ? 'badge' : sg === 'h1' || sg === 'body' ? 'text' : String(sg).replace(/^(xb:[^:]+):.*$/, '$1');
+    if (!out.includes(id)) out.push(id);
+  }
+  return out;
 }

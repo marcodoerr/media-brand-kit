@@ -3605,3 +3605,24 @@ kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; 
 .adapt-list li.is-note { color: var(--txt-dim); list-style: circle; }
 .adapt-acts { display: flex; justify-content: flex-end; gap: 8px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* v4 · Export: what to export, file type, pick sections, elements */
+.sheet-scope { margin-bottom: 12px; }
+.seg-scope { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.seg-scope button { display: grid; gap: 2px; padding: 9px 10px; text-align: left; }
+.seg-scope small { font-size: 11px; font-weight: 400; color: var(--txt-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg-scope button[aria-checked="true"] small { color: inherit; opacity: .8; }
+@media (max-width: 520px) { .seg-scope { grid-template-columns: 1fr 1fr; } }
+.seg-filetype button[hidden] { display: none; }
+.sheet-thumbs.is-pick { padding: 2px 2px 6px; }
+.sheet-pick { margin: 0; flex: none; display: grid; gap: 4px; justify-items: center; padding: 4px; border-radius: 10px; border: 2px solid transparent; background: none; color: inherit; cursor: pointer; position: relative; }
+.sheet-pick img { opacity: .4; transition: opacity .15s; }
+.sheet-pick.is-on { border-color: var(--active); }
+.sheet-pick.is-on img { opacity: 1; }
+.sheet-pick.is-on::after { content: "✓"; position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--active); color: var(--on-active); font: 700 11px/1 Poppins, sans-serif; }
+.sheet-pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#sheet-zip-row { margin: 4px 0 10px; }
+#sheet-zip-row[hidden], #pdf-hint[hidden], .sheet-sel[hidden], #sheet-options[hidden], #sheet-summary[hidden], #sheet-items[hidden] { display: none; }
+.sheet-sel { display: grid; gap: 10px; }
+.sel-row input { position: absolute; top: 10px; left: 10px; z-index: 1; width: 18px; height: 18px; margin: 0; accent-color: var(--active); }
+.sel-row:has(input:checked) { border-color: var(--active); box-shadow: 0 0 0 1px var(--active); }
+.seg-scope { grid-template-columns: 1fr 1fr; }

@@ -1014,15 +1014,33 @@
       <p class="sheet-facts"><span class="type-chip" id="sheet-type">Video</span> <span id="sheet-facts"></span></p>
     </div>
 
+    <!-- v4 · what to export: the whole project, sections you pick, the one you are on, or selected elements -->
+    <div class="sheet-scope" id="sheet-scope-row">
+      <span class="lbl lbl-sub">What to export</span>
+      <div class="segments seg-scope" id="seg-scope" role="radiogroup" aria-label="What to export">
+        <button type="button" role="radio" data-scope="all" aria-checked="true">Entire project<small id="scope-all-sub">Every section</small></button>
+        <button type="button" role="radio" data-scope="pick" aria-checked="false">Choose<small id="scope-pick-sub">Tap to include</small></button>
+        <button type="button" role="radio" data-scope="current" aria-checked="false">This one<small id="scope-cur-sub">Hook</small></button>
+        <button type="button" role="radio" data-scope="elements" aria-checked="false">Elements<small id="scope-el-sub">Selected items</small></button>
+      </div>
+    </div>
     <!-- step 2: only what the chosen file needs -->
     <div class="sheet-options" id="sheet-options">
       <div id="sheet-filetype-row">
         <span class="lbl lbl-sub">File type</span>
-        <div class="segments seg-size" id="seg-filetype" role="radiogroup" aria-label="File type">
+        <div class="segments seg-size seg-filetype" id="seg-filetype" role="radiogroup" aria-label="File type">
+          <button type="button" role="radio" data-kind="video" aria-checked="false">Video<small id="kind-video-sub">MP4</small></button>
           <button type="button" role="radio" data-kind="png" aria-checked="true">PNG<small>Sharpest</small></button>
           <button type="button" role="radio" data-kind="jpg" aria-checked="false">JPG<small>Smaller files</small></button>
+          <button type="button" role="radio" data-kind="pdf" aria-checked="false">PDF<small>One page each</small></button>
         </div>
       </div>
+      <label class="switch" id="sheet-zip-row" hidden>
+        <input type="checkbox" id="sheet-zip" checked>
+        <span class="track" aria-hidden="true"></span>
+        <span>Package as one .zip <small class="switch-sub">numbered in order; off = separate downloads</small></span>
+      </label>
+      <p class="micro" id="pdf-hint" hidden>A PDF for sharing or printing: one page per slide, each page a picture of it. Presenting is the Present button, not this file.</p>
       <span class="lbl lbl-sub">Size</span>
       <div class="segments seg-size" id="seg-size" role="radiogroup" aria-label="Size">
         <button type="button" role="radio" data-scale="1" aria-checked="true">Standard<small id="size-1">1080 × 1920</small></button>
@@ -1048,16 +1066,26 @@
     </div>
     <!-- each item of a section — background, text, buttons, media, badge — as its own PNG -->
     <details class="sheet-items" id="sheet-items">
-      <summary><span>Items as separate PNGs</span><small>Transparent · for other tools</small></summary>
+      <summary><span>Elements as separate PNGs</span><small>Transparent · for other tools</small></summary>
       <div class="segments items-scenes" id="items-scenes" role="radiogroup" aria-label="Section"></div>
       <div class="items-list" id="items-list"></div>
       <label class="switch">
         <input type="checkbox" id="items-full">
         <span class="track" aria-hidden="true"></span>
-        <span>Full frame <small class="switch-sub">Each item where it sits, at the full size — for layering</small></span>
+        <span>Keep each element in its original position <small class="switch-sub">Full-size transparent files that line up when layered</small></span>
       </label>
       <button class="btn btn-outline btn-block" id="items-all" type="button">Save all items as .zip</button>
     </details>
+    <div class="sheet-sel" id="sheet-sel" hidden>
+      <p class="micro" id="sel-sum"></p>
+      <div class="items-list" id="sel-list"></div>
+      <label class="switch">
+        <input type="checkbox" id="sel-full">
+        <span class="track" aria-hidden="true"></span>
+        <span>Keep each element in its original position <small class="switch-sub">Full-size transparent files that line up when layered</small></span>
+      </label>
+      <button class="btn btn-primary btn-block" id="sel-go" type="button">Download</button>
+    </div>
     <p class="upload-error" id="export-note" hidden></p>
   </div>
 </div>
