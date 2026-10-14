@@ -17,6 +17,7 @@ import {
 } from './store.js';
 import { installImportGuard, installDecoderBudget, reportUnplayable } from './v4/importer.js';
 import { watchPersistence, installFaultGuard, persistence, onPersistence } from './v4/guard.js';
+import { CAPTION_STYLES, CAPTION_POS, captionDefaults, parseCues, cuesFromScript, toSrt, cueAt, drawCaption } from './v4/captions.js';
 import { plan as adaptPlan, isPureAuto } from './v4/adapt.js';
 import { pdfOf } from './v4/pdf.js';
 import { describe as describeProject, scopedChange } from './v4/model.js';
@@ -239,6 +240,7 @@ function starterDesign(id) {
       { id: 'cta', role: 'cta', on: true, h1: copy('cta').h1, body: copy('cta').body, ctaStyle: st.ctaStyle || 'button' },
     ],
     scene: 0, sharedBg: null, sharedStill: null, sharedOverlay: null,
+    captions: null,
   };
 }
 
@@ -1529,6 +1531,7 @@ function duplicateSection(i) {
 let clipMenuFor = -1;
 
 const MENU_ICONS = {
+  captions: '<svg viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M10.5 10.2a2.2 2.2 0 1 0 0 3.6M17 10.2a2.2 2.2 0 1 0 0 3.6"/></svg>',
   save: '<svg viewBox="0 0 24 24"><path d="M5 4.5h11l3.5 3.5v11a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V6A1.5 1.5 0 0 1 6 4.5z"/><path d="M8 4.5v5h7v-5M8 20.5v-6h8v6"/></svg>',
   add: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   left: '<svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>',
@@ -6915,6 +6918,7 @@ function openTemplateDesign() {
   try {
     const d = proposalData(r);
     for (const k of DESIGN_KEYS) if (d[k] !== undefined) state[k] = clone(d[k]); if (d.overlays === undefined) state.overlays = [];   // v3.13: a design from before overlay clips has none
+  if (d.captions === undefined) state.captions = null;   // v4.1: nor captions
     state.pristine = true;
     save();
   } catch (e) { console.warn('template', e); }
@@ -7646,7 +7650,7 @@ const DESIGN_KEYS = [
   'brand', 'backdrop', 'format', 'h1', 'body', 'scale', 'h1Scale', 'bodyScale', 'scenes', 'scene', 'sharedBg', 'sharedStill', 'sharedOverlay',
   'visibility', 'textTone', 'badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeUpper', 'badgeMiddle', 'card', 'overlay',
   'adjust', 'inset', 'video', 'pos', 'music', 'textColors', 'cardColors', 'contentType', 'blocks', 'textMode', 'borders', 'buttons', 'media', 'badges',
-  'drawings', 'safeFor', 'badgeShape', 'badgeHalo', 'ctaBox', 'overlays',
+  'drawings', 'safeFor', 'badgeShape', 'badgeHalo', 'ctaBox', 'overlays', 'captions',
 ];
 
 function loadTemplates() {
@@ -7707,6 +7711,7 @@ async function applyTemplate(entry) {
   retireIds(d);
   unlinkAll(d);                 // Show on is gone: designs saved with links come in unlinked
   for (const k of DESIGN_KEYS) if (d[k] !== undefined) state[k] = clone(d[k]); if (d.overlays === undefined) state.overlays = [];   // v3.13: a design from before overlay clips has none
+  if (d.captions === undefined) state.captions = null;   // v4.1: nor captions
   // templates saved before Header and Body scaled separately carry one `scale`
   state.h1Scale = h1ScaleOf(d);
   state.bodyScale = bodyScaleOf(d);
@@ -10654,6 +10659,7 @@ function addItems(pointerType) {
     } });
   }
   items.push({ icon: 'draw', label: 'Drawing', sub: 'Draw on the canvas — lines, arrows, circles', run: () => setTimeout(() => enterDraw(null), 0) });
+  if (state.contentType !== 'carousel') items.push({ icon: 'captions', label: 'Captions', sub: state.captions && state.captions.cues && state.captions.cues.length ? `${state.captions.cues.length} lines · style, size, position` : 'Words on screen for the whole reel', run: () => setTimeout(openCaptions, 0) });
   if (state.contentType !== 'carousel') items.push({ icon: 'film', label: 'Overlay clip', sub: 'Media, text, a badge, a cogent or a drawing — for a moment of the film', more: true, run: () => setTimeout(() => openOverlayAddMenu(addAnchor && addAnchor.isConnected ? addAnchor : $('#fs-add-section')), 0) });
   // v4 · sections / slides are added with their own button (the timeline's Add section), not here —
   // except in desktop full screen, where the timeline is out of sight: then last, after a line
@@ -13374,6 +13380,170 @@ function wireHistory() {
   syncUndoButtons();
 }
 
+/* ===== v4.1 · Captions (reels) ==================================================================
+   One caption track for the whole reel, timed on the film clock: type lines (one at the playhead),
+   paste a script (spread by word count), or import an .srt / .vtt. Four brand styles, a size and a
+   position. Drawn after everything else on the live canvas, so the preview and the exported video
+   match; still exports and thumbnails leave them out. Automatic captions from the audio are Release 2. */
+function capBrand() {
+  const b = activeBrand();
+  const plate = b.textBadge || { fill: '#1a1915', ink: '#ffffff' };
+  const btn = (b.cta && b.cta.button) || { bg: '#ffffff', ink: '#000000' };
+  const head = (b.type && b.type.h1) || (b.cta && b.cta.bold) || { family: 'Poppins, sans-serif', weight: 700 };
+  return { headFamily: head.family, headWeight: head.weight || 800, bodyFamily: 'Poppins, system-ui, sans-serif',
+    plateFill: plate.fill, plateInk: plate.ink, btnBg: btn.bg, btnInk: btn.ink };
+}
+const capState = () => state.captions || null;
+function drawCaptions(ctx, W, H) {
+  const c = capState();
+  if (!c || !c.on || !c.cues || !c.cues.length || state.contentType === 'carousel') return;
+  if (!(recording || ctx.canvas === canvas)) return;
+  const clock = filmClock();
+  const cue = cueAt(c.cues, clock == null ? playT : clock);
+  if (cue) drawCaption(ctx, W, H, cue.text, c, capBrand());
+}
+const fmtT = (t) => { const m = Math.floor(t / 60), s = t - m * 60; return `${m}:${s < 10 ? '0' : ''}${s.toFixed(1)}`; };
+function capEdit(fn, live = false) {
+  if (!state.captions) state.captions = captionDefaults();
+  fn(state.captions);
+  state.captions.cues.sort((a, b) => a.start - b.start);
+  if (!live) save();
+  draw();
+  if (!live) renderCaptions();
+}
+function capPop() {
+  let p = $('#cap-pop');
+  if (p) return p;
+  p = document.createElement('section');
+  p.id = 'cap-pop'; p.className = 'cap-pop'; p.hidden = true;
+  p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Captions');
+  p.innerHTML = `
+    <div class="cap-head"><h2>Captions</h2>
+      <label class="switch cap-on"><input type="checkbox" id="cap-on"><span class="track" aria-hidden="true"></span><span class="sr-only">Show captions</span></label>
+      <button type="button" class="cap-close" id="cap-close" aria-label="Close">×</button></div>
+    <span class="lbl lbl-sub">Style</span>
+    <div class="segments cap-styles" id="cap-styles" role="radiogroup" aria-label="Caption style">${CAPTION_STYLES.map((x) => `<button type="button" role="radio" data-s="${x.id}" aria-checked="false"><i class="cap-sw cap-sw-${x.id}" aria-hidden="true">Aa</i>${x.name}</button>`).join('')}</div>
+    <div class="cap-row"><span class="lbl lbl-sub">Size</span><input type="range" id="cap-size" min="0.6" max="1.8" step="0.05"><output id="cap-size-out"></output></div>
+    <span class="lbl lbl-sub">Position</span>
+    <div class="segments segments-sm cap-pos" id="cap-pos" role="radiogroup" aria-label="Caption position">${CAPTION_POS.map((x) => `<button type="button" role="radio" data-p="${x.id}" aria-checked="false">${x.name}</button>`).join('')}</div>
+    <div class="cap-lines-head"><span class="lbl lbl-sub">Lines</span><span class="micro" id="cap-count"></span></div>
+    <ol class="cap-lines" id="cap-lines"></ol>
+    <div class="cap-acts">
+      <button type="button" class="btn btn-ghost" id="cap-add">+ Line at the playhead</button>
+      <button type="button" class="btn btn-ghost" id="cap-script">Paste a script</button>
+      <button type="button" class="btn btn-ghost" id="cap-import">Import .srt / .vtt</button>
+      <button type="button" class="btn btn-ghost" id="cap-download">Download .srt</button>
+      <input type="file" id="cap-file" accept=".srt,.vtt,text/vtt,application/x-subrip" hidden>
+    </div>
+    <div class="cap-script" id="cap-script-box" hidden>
+      <textarea id="cap-script-text" rows="5" placeholder="Paste or type the words. Each sentence or line becomes a caption, spread over the reel by length."></textarea>
+      <div class="cap-acts"><button type="button" class="btn btn-ghost" id="cap-script-cancel">Cancel</button><button type="button" class="btn btn-primary" id="cap-script-go">Make captions</button></div>
+    </div>
+    <p class="micro">Automatic captions from the video’s sound come with Release 2.</p>`;
+  document.body.append(p);
+  const close = () => { p.hidden = true; };
+  $('#cap-close').addEventListener('click', close);
+  p.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  $('#cap-on').addEventListener('change', (e) => capEdit((c) => { c.on = e.target.checked; }));
+  for (const b of p.querySelectorAll('#cap-styles button')) b.addEventListener('click', () => capEdit((c) => { c.style = b.dataset.s; }));
+  for (const b of p.querySelectorAll('#cap-pos button')) b.addEventListener('click', () => capEdit((c) => { c.pos = b.dataset.p; }));
+  $('#cap-size').addEventListener('input', (e) => { capEdit((c) => { c.scale = Number(e.target.value); }, true); $('#cap-size-out').textContent = `${Math.round(Number(e.target.value) * 100)}%`; });
+  $('#cap-size').addEventListener('change', () => { save(); });
+  $('#cap-add').addEventListener('click', () => {
+    const total = timelineSecs();
+    const t0 = Math.min(Math.max(0, playT), Math.max(0, total - 0.5));
+    const id = Date.now().toString(36);
+    capEdit((c) => { c.on = true; c.cues.push({ id, start: Math.round(t0 * 10) / 10, end: Math.round(Math.min(total, t0 + 2) * 10) / 10, text: '' }); });
+    const inp = p.querySelector(`.cap-line[data-id="${id}"] .cap-text`); if (inp) inp.focus();
+  });
+  $('#cap-script').addEventListener('click', () => { $('#cap-script-box').hidden = false; $('#cap-script-text').focus(); });
+  $('#cap-script-cancel').addEventListener('click', () => { $('#cap-script-box').hidden = true; });
+  $('#cap-script-go').addEventListener('click', () => {
+    const cues = cuesFromScript($('#cap-script-text').value, timelineSecs());
+    if (!cues.length) { showToast('Nothing to turn into captions', null, null, 2000); return; }
+    capEdit((c) => { c.on = true; c.cues = cues.map((x, i) => ({ id: `${Date.now().toString(36)}${i}`, ...x })); });
+    $('#cap-script-box').hidden = true; $('#cap-script-text').value = '';
+    showToast(`${cues.length} captions made from the script`, null, null, 2600);
+  });
+  $('#cap-import').addEventListener('click', () => $('#cap-file').click());
+  $('#cap-file').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    let cues = [];
+    try { cues = parseCues(await f.text()); } catch (_) {}
+    if (!cues.length) { showToast('No captions found in that file — it needs .srt or .vtt timings', null, null, 3500); return; }
+    const total = timelineSecs();
+    const late = cues.filter((x) => x.start >= total).length;
+    capEdit((c) => { c.on = true; c.cues = cues.map((x, i) => ({ id: `${Date.now().toString(36)}${i}`, ...x })); });
+    showToast(late ? `${cues.length} captions imported · ${late} start after the reel ends (${fmtT(total)})` : `${cues.length} captions imported`, null, null, 3500);
+  });
+  $('#cap-download').addEventListener('click', () => {
+    const c = capState();
+    if (!c || !c.cues.length) { showToast('No captions yet', null, null, 1800); return; }
+    const url = URL.createObjectURL(new Blob([toSrt(c.cues)], { type: 'application/x-subrip' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'captions.srt'; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  });
+  // the line list: edit in place, tap a time to jump there
+  const list = $('#cap-lines');
+  list.addEventListener('input', (e) => {
+    const row = e.target.closest('.cap-line'); if (!row) return;
+    const cue = capState().cues.find((x) => x.id === row.dataset.id); if (!cue) return;
+    if (e.target.classList.contains('cap-text')) { cue.text = e.target.value; draw(); }
+  });
+  list.addEventListener('change', (e) => {
+    const row = e.target.closest('.cap-line'); if (!row) return;
+    capEdit((c) => {
+      const cue = c.cues.find((x) => x.id === row.dataset.id); if (!cue) return;
+      if (e.target.classList.contains('cap-start')) cue.start = Math.max(0, Number(e.target.value) || 0);
+      if (e.target.classList.contains('cap-end')) cue.end = Math.max(cue.start + 0.2, Number(e.target.value) || 0);
+      if (cue.end <= cue.start) cue.end = Math.round((cue.start + 1) * 10) / 10;
+    });
+  });
+  list.addEventListener('click', (e) => {
+    const row = e.target.closest('.cap-line'); if (!row) return;
+    if (e.target.closest('.cap-del')) { capEdit((c) => { c.cues = c.cues.filter((x) => x.id !== row.dataset.id); }); return; }
+    if (e.target.closest('.cap-jump')) { const cue = capState().cues.find((x) => x.id === row.dataset.id); if (cue) { seek(cue.start + 0.01); draw(); } }
+  });
+  return p;
+}
+function renderCaptions() {
+  const p = $('#cap-pop'); if (!p || p.hidden) return;
+  const c = capState() || captionDefaults();
+  const cb = capBrand();
+  p.style.setProperty('--plate-fill', cb.plateFill); p.style.setProperty('--plate-ink', cb.plateInk);
+  p.style.setProperty('--cap-btn-bg', cb.btnBg); p.style.setProperty('--cap-btn-ink', cb.btnInk); p.style.setProperty('--cap-head', cb.headFamily);
+  $('#cap-on').checked = !!(state.captions && c.on);
+  for (const b of p.querySelectorAll('#cap-styles button')) b.setAttribute('aria-checked', String(b.dataset.s === c.style));
+  for (const b of p.querySelectorAll('#cap-pos button')) b.setAttribute('aria-checked', String(b.dataset.p === c.pos));
+  $('#cap-size').value = c.scale; $('#cap-size-out').textContent = `${Math.round(c.scale * 100)}%`;
+  $('#cap-count').textContent = c.cues.length ? `${c.cues.length} · reel ${fmtT(timelineSecs())}` : '';
+  const esc = (t) => String(t).replace(/[&<>"]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+  const focusId = document.activeElement && document.activeElement.closest && document.activeElement.closest('.cap-line') ? document.activeElement.closest('.cap-line').dataset.id : null;
+  $('#cap-lines').innerHTML = c.cues.length ? c.cues.map((x) => `<li class="cap-line" data-id="${x.id}">
+      <button type="button" class="cap-jump" aria-label="Jump to ${fmtT(x.start)}" title="Show this moment">▶</button>
+      <input class="cap-start" type="number" step="0.1" min="0" value="${x.start}" aria-label="Starts at (seconds)">
+      <span class="cap-dash" aria-hidden="true">–</span>
+      <input class="cap-end" type="number" step="0.1" min="0" value="${x.end}" aria-label="Ends at (seconds)">
+      <input class="cap-text" type="text" value="${esc(x.text)}" placeholder="Type the caption" aria-label="Caption text">
+      <button type="button" class="cap-del" aria-label="Remove this line">×</button></li>`).join('')
+    : '<li class="cap-empty micro">No lines yet. Add one at the playhead, paste a script, or import a file.</li>';
+  if (focusId) { const el = p.querySelector(`.cap-line[data-id="${focusId}"] .cap-text`); if (el) el.focus(); }
+}
+function openCaptions() {
+  if (state.contentType === 'carousel') return;
+  if (!state.captions) { state.captions = captionDefaults(); }
+  const p = capPop();
+  p.hidden = false;
+  renderCaptions();
+  $('#cap-close').focus();
+}
+function wireCaptions() {
+  const prev = renderHooks.afterAll;
+  renderHooks.afterAll = (ctx, W, H, st, opts) => { if (prev) prev(ctx, W, H, st, opts); drawCaptions(ctx, W, H); };
+  onPersistence(() => { if (!document.activeElement || !document.activeElement.closest || !document.activeElement.closest('#cap-pop')) renderCaptions(); });
+}
+
 /* v4.1 · Header tips: the top bar is icons only; each says what it does on hover / keyboard focus.
    The native title tooltip is removed so there is only one, quicker, styled label. */
 const HEADER_TIPS = {
@@ -13403,6 +13573,7 @@ function wireV4() {
   wireV4Nav();
   wireHistory();
   wireHeaderTips();
+  wireCaptions();
   wireV4Adapt();
   if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence, model: () => describeProject(state), scoped: (scope, label, fn) => scopedChange({ state: () => state, pushUndo, commitScene, save, draw, renderScenes }, scope, label, fn), plan: (f) => planAdapt(f), apply: (f) => applyAdapt(planAdapt(f), f || state.format) };
   // a background that can't be painted: the base colour stands in (render.js) and we say so once

@@ -273,6 +273,7 @@ export function installImportGuard(appApi) {
     const input = e.target;
     if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
     if (input.__v4pass || SKIP_INPUTS.has(input.id)) return;
+    if (input.accept && !/image|video/.test(input.accept)) return;   // only media pickers (captions files etc. pass straight through)
     const files = [...(input.files || [])];
     if (!files.length) return;
     const anyVideo = files.some((f) => kindOf(f) === 'video');
