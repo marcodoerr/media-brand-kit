@@ -206,7 +206,9 @@ function starterDesign(id) {
   const b = BRANDS[id];
   const st = b.starter || {};
   const copy = (role) => ({ ...SCENE_COPY[role], ...(st[role] || {}) });
-  const pattern = (b.featured || []).map((x) => b.backdrops.find((bd) => bd.id === x)).find((bd) => bd && bd.kind === 'tile')
+  // v4.1: the brand's calm default (a plain colour) first; a pattern only if a brand has none
+  const pattern = (b.defaultBackdrop && b.backdrops.find((bd) => bd.id === b.defaultBackdrop))
+    || (b.featured || []).map((x) => b.backdrops.find((bd) => bd.id === x)).find((bd) => bd && bd.kind === 'tile')
     || b.backdrops.find((bd) => bd.kind === 'tile') || b.backdrops[0];
   const tone = pattern.tone === 'dark' ? 'light' : (st.textTone || 'dark');
   return {
@@ -11958,14 +11960,14 @@ function setFsMode(mode) {
   $('#fs-open').setAttribute('aria-pressed', String(!!mode));
   const pv = $('#fs-preview');
   pv.setAttribute('aria-pressed', String(mode === 'preview'));
-  $('#fs-preview-label').textContent = mode === 'preview' ? 'Edit' : 'Present';
-  pv.setAttribute('aria-label', mode === 'preview' ? 'Back to editing' : 'Present');
-  pv.title = mode === 'preview' ? 'Back to editing (Esc)' : 'Present: exactly as it exports';
+  $('#fs-preview-label').textContent = mode === 'preview' ? 'Edit' : 'Preview';
+  pv.setAttribute('aria-label', mode === 'preview' ? 'Back to editing' : 'Preview');
+  pv.title = mode === 'preview' ? 'Back to editing (Esc)' : 'Preview: exactly as it exports';
   const tp = $('#btn-present'); if (tp) tp.setAttribute('aria-pressed', String(mode === 'preview'));
   $('#fs-play').hidden = mode !== 'preview';
   $('#fs-add-section').hidden = mode !== 'edit';
   $('#fs-hint').textContent = mode === 'preview'
-    ? (state.contentType === 'carousel' ? 'Presenting · play, swipe or use the arrows · Esc to edit' : 'Presenting · exactly as it exports · Esc to edit')
+    ? (state.contentType === 'carousel' ? 'Preview · play, swipe or use the arrows · Esc to edit' : 'Preview · exactly as it exports · Esc to edit')
     : 'Tap empty space to add · tap an item to edit';
   if (mode === 'preview') {
     if (sheetTab) closeSectionSheet({ focus: false });
@@ -13100,14 +13102,16 @@ const redoStack = [];
 function pushUndo(what) {
   try {
     undoStack.push({ what, data: snapshot() });
-    if (undoStack.length > 20) undoStack.shift();
+    if (undoStack.length > HIST_MAX) undoStack.shift();
     redoStack.length = 0;
   } catch (_) {}
+  syncUndoButtons();
   showToast(`${what}`, 'Undo', undoLast);
 }
 async function redoLast() {
   const r = redoStack.pop();
-  if (!r) return;
+  if (!r) { syncUndoButtons(); return; }
+  histApplying = true;
   dropMulti();
   try { undoStack.push({ what: r.what, data: snapshot() }); } catch (_) {}
   stopPlayback();
@@ -13117,12 +13121,16 @@ async function redoLast() {
   renderButtons(); renderBlocks(); renderBadgeItems();
   draw();
   showToast(`${r.what} again`, 'Undo', undoLast);
+  syncUndoButtons();
+  histSettle();
 }
 async function undoLast() {
   dropMulti();   // a selection belongs to the design and section it was made on
+  if (!histApplying) { clearTimeout(histTimer); histRecord(); }   // v4.1: an edit not yet saved is the step to undo first
   const u = undoStack.pop();
   hideToast();
-  if (!u) return;
+  if (!u) { syncUndoButtons(); return; }
+  histApplying = true;
   try { redoStack.push({ what: u.what, data: snapshot() }); if (redoStack.length > 20) redoStack.shift(); } catch (_) {}
   stopPlayback();
   if (editor) closeEditor(true);
@@ -13133,6 +13141,8 @@ async function undoLast() {
   renderBadgeItems();
   draw();
   showToast(`Undone · ${u.what}`, 'Redo', redoLast);
+  syncUndoButtons();
+  histSettle();
 }
 function showToast(text, action, run, ms = 6000) {
   let t = $('#undo-toast');
@@ -13186,6 +13196,7 @@ document.addEventListener('keydown', (e) => {
   const a = document.activeElement;
   if (a && (/INPUT|TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable)) return;   // their own undo
   e.preventDefault();   // v4.1: always ours — otherwise Safari's ⌘Z reopens a closed tab ("Undo Close Tab")
+  if (!histApplying) { clearTimeout(histTimer); histRecord(); }   // an edit not yet saved counts
   if (!undoStack.length) { showToast('Nothing to undo', null, null, 1600); return; }
   undoLast();
 });
@@ -13286,6 +13297,83 @@ function v4Api() {
     afterImport: () => { try { showStorage(); } catch (_) {} },
   };
 }
+/* ===== v4.1 · Undo for every change, and Undo / Redo buttons =====================================
+   Only some actions recorded an undo step before (about 40, mostly removals and moves). Now every
+   change the design saves is one step: whenever the app writes the design, the state from before
+   the change goes on the undo stack — quietly, no toast, and a slider drag counts once (the writes
+   are settled for 450 ms). Moving between sections is not a step. Undo / Redo are buttons in the
+   top bar and the full-screen bar, as well as ⌘Z / ⇧⌘Z. */
+const HIST_MAX = 40;
+const DEBUG_HIST = /[?&]debug\b/.test(location.search);
+let histBase = null;          // the design as last settled (JSON)
+let histApplying = false;     // an undo / redo is being applied: its own save is not a new step
+let histTimer = 0;
+const histJson = () => { try { return JSON.stringify(snapshot()); } catch (_) { return null; } };
+// what counts as a change: everything but derived caches (sharedStill is a still the app keeps for itself)
+const histCmp = (json) => { try { const o = JSON.parse(json); delete o.sharedStill; return JSON.stringify(o); } catch (_) { return json; } };
+// after an undo / redo the app still tidies up for a moment (healing, thumbnails): wait until its saves go quiet
+function histSettle() { clearTimeout(histTimer); histTimer = setTimeout(() => { histBase = histJson(); histApplying = false; syncUndoButtons(); }, 700); }
+function histRecord() {
+  if (histApplying) return;
+  const cur = histJson();
+  if (!cur || cur === histBase) return;
+  if (histBase && histCmp(cur) === histCmp(histBase)) { histBase = cur; return; }   // only a cache moved
+  if (histBase) {
+    let prev = null; try { prev = JSON.parse(histBase); } catch (_) {}
+    const sameSection = prev && prev.scene === state.scene;
+    const top = undoStack[undoStack.length - 1];
+    const already = top && histCmp(JSON.stringify(top.data)) === histCmp(histBase);   // pushUndo already kept this one
+    if (prev && sameSection && !already) {
+      if (DEBUG_HIST) { try { const c = JSON.parse(cur); (window.__histDiffs = window.__histDiffs || []).push(Object.keys(c).filter((k) => JSON.stringify(c[k]) !== JSON.stringify(prev[k]))); } catch (_) {} }
+      undoStack.push({ what: 'Last change', data: prev });
+      if (undoStack.length > HIST_MAX) undoStack.shift();
+      redoStack.length = 0;
+    }
+  }
+  histBase = cur;
+  syncUndoButtons();
+}
+function syncUndoButtons() {
+  for (const b of document.querySelectorAll('[data-hist="undo"]')) b.disabled = !undoStack.length;
+  for (const b of document.querySelectorAll('[data-hist="redo"]')) b.disabled = !redoStack.length;
+}
+function wireHistory() {
+  histBase = histJson();
+  // your own next touch ends the settling after an undo / redo: what you do now is a new step
+  const endSettle = (e) => {
+    if (!histApplying) return;
+    if (e.target && e.target.closest && e.target.closest('[data-hist], #undo-toast')) return;
+    if (e.type === 'keydown' && (e.metaKey || e.ctrlKey)) return;
+    clearTimeout(histTimer); histBase = histJson(); histApplying = false; syncUndoButtons();
+  };
+  for (const t of ['pointerdown', 'keydown']) document.addEventListener(t, endSettle, true);
+  onPersistence((p) => { if (p.state !== 'saved') return; if (histApplying) { histSettle(); return; } clearTimeout(histTimer); histTimer = setTimeout(histRecord, 450); });
+  const ICON_UNDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
+  const ICON_REDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  const make = (kind, cls) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = cls; b.dataset.hist = kind;
+    const label = kind === 'undo' ? 'Undo' : 'Redo';
+    const keys = kind === 'undo' ? (mac ? '⌘Z' : 'Ctrl+Z') : (mac ? '⇧⌘Z' : 'Ctrl+Shift+Z');
+    b.setAttribute('aria-label', label); b.title = `${label} (${keys})`;
+    b.innerHTML = kind === 'undo' ? ICON_UNDO : ICON_REDO;
+    b.addEventListener('click', () => (kind === 'undo' ? undoLast() : redoLast()));
+    return b;
+  };
+  // top bar: first in the right-hand group (the toast sits over the middle of the bar), before New project
+  const first = $('#btn-new-proj') || $('#btn-save-proj');
+  if (first) {
+    const g = document.createElement('div'); g.className = 'hist-btns'; g.setAttribute('role', 'group'); g.setAttribute('aria-label', 'Undo and redo');
+    g.append(make('undo', 'hist-btn'), make('redo', 'hist-btn'));
+    first.before(g);
+  }
+  // full-screen bar (desktop full screen and the phone editor): after Add
+  const add = $('#fs-add-section');
+  if (add) { const u = make('undo', 'fs-btn hist-fs'), r = make('redo', 'fs-btn hist-fs'); add.after(u, r); }
+  syncUndoButtons();
+}
+
 let v4Wired = false;
 function wireV4() {
   if (v4Wired) return;
@@ -13296,6 +13384,7 @@ function wireV4() {
   installDecoderBudget(api, mediaFor);
   setTimeout(() => reportUnplayable(api, mediaFor), 1500);
   wireV4Nav();
+  wireHistory();
   wireV4Adapt();
   if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence, model: () => describeProject(state), scoped: (scope, label, fn) => scopedChange({ state: () => state, pushUndo, commitScene, save, draw, renderScenes }, scope, label, fn), plan: (f) => planAdapt(f), apply: (f) => applyAdapt(planAdapt(f), f || state.format) };
   // a background that can't be painted: the base colour stands in (render.js) and we say so once

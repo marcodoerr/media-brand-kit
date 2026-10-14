@@ -3660,3 +3660,17 @@ kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; 
 @media (max-width: 720px) {
   .seg-scope button, .seg-size button { padding: 7px 14px; font-size: 13px; }
 }
+
+/* v4.1 · Undo / Redo buttons — the top bar (desktop) and the full-screen bar (desktop full screen + phone) */
+.hist-btns { display: flex; gap: 6px; flex: none; }
+.hist-btn {
+  flex: none; width: 40px; height: 40px; display: inline-grid; place-items: center; padding: 0;
+  border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--txt); cursor: pointer;
+  transition: border-color .15s, opacity .15s;
+}
+.hist-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hist-btn:hover:not(:disabled) { border-color: var(--active); }
+.hist-btn:focus-visible, .hist-fs:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.hist-btn:disabled, .hist-fs:disabled { opacity: .35; cursor: default; }
+@media (max-width: 820px) { .hist-btns { display: none; } }   /* the phone has them in its editor bar */
+html.is-fs-preview .hist-fs { display: none; }

@@ -69,8 +69,8 @@
     <button class="save-heart new-proj" id="btn-new-proj" type="button" aria-label="New project" title="New project in this brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13.5 3.5V9H19"/><path d="M12 12v6M9 15h6"/></svg></button>
     <!-- v4 · Save a named copy (was a heart). The open design itself saves automatically: see the status. -->
     <button class="save-heart save-copy" id="btn-save-proj" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="save-pop" aria-label="Save a named copy" title="Save a named copy (the open design saves automatically)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11l3.5 3.5v11a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V6A1.5 1.5 0 0 1 6 4.5z"/><path d="M8 4.5v5h7v-5M8 20.5v-6h8v6"/></svg><span class="btn-label">Save copy</span></button>
-    <!-- v4 · Present: the design full screen, exactly as it exports (videos play, carousels swipe) -->
-    <button class="save-heart present-btn" id="btn-present" type="button" aria-label="Present" title="Present: full screen, exactly as it exports"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="btn-label">Present</span></button>
+    <!-- v4 · Preview (was Present): the design full screen, exactly as it exports (videos play, carousels swipe) -->
+    <button class="save-heart present-btn" id="btn-present" type="button" aria-label="Preview" title="Preview: full screen, exactly as it exports"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="btn-label">Preview</span></button>
     <button class="btn btn-primary" id="btn-export" type="button" aria-label="Export" title="Export"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4.5"/></svg><span class="btn-label">Export</span></button>
   </div>
 </header>
@@ -140,10 +140,10 @@
           <!-- desktop: the view settings (safe area, grid) with the full-screen control -->
           <button class="fs-btn" id="fs-view" type="button" aria-haspopup="menu" aria-label="View: safe area and grid" title="View: safe area and grid">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 12h16M12 4v16" opacity=".55"/></svg></button>
-          <button class="fs-btn fs-pill" id="fs-preview" type="button" aria-pressed="false" aria-label="Present" title="Present: exactly as it exports">
+          <button class="fs-btn fs-pill" id="fs-preview" type="button" aria-pressed="false" aria-label="Preview" title="Preview: exactly as it exports">
             <svg class="i-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg class="i-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5a2 2 0 0 1 3 3L9 18l-4 1z"/></svg>
-            <span id="fs-preview-label">Present</span>
+            <span id="fs-preview-label">Preview</span>
           </button>
           <!-- phone only: the light/dark preview background, and More (Guides, saved designs) -->
           <button class="fs-btn fs-phone" id="fs-surface" type="button" aria-label="Preview on a light background" title="Light / dark preview background">
@@ -1040,7 +1040,7 @@
         <span class="track" aria-hidden="true"></span>
         <span>Package as one .zip <small class="switch-sub">numbered in order; off = separate downloads</small></span>
       </label>
-      <p class="micro" id="pdf-hint" hidden>A PDF for sharing or printing: one page per slide, each page a picture of it. Presenting is the Present button, not this file.</p>
+      <p class="micro" id="pdf-hint" hidden>A PDF for sharing or printing: one page per slide, each page a picture of it. Showing it full screen is the Preview button, not this file.</p>
       <span class="lbl lbl-sub">Size</span>
       <div class="segments seg-size" id="seg-size" role="radiogroup" aria-label="Size">
         <button type="button" role="radio" data-scale="1" aria-checked="true">Standard<small id="size-1">1080 × 1920</small></button>

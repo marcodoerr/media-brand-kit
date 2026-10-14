@@ -324,7 +324,7 @@ export const BRANDS = {
       button: { bg: '#ff8eff', ink: '#4a0649', family: 'Poppins, system-ui, sans-serif', weight: 700 },
       bold:   { family: 'Bitter, Georgia, serif', weight: 700 },
     },
-    defaultBackdrop: 'pattern-pink',   // what a switch to this brand opens on — like Ask Ruth's Pattern Pink
+    defaultBackdrop: 'solid-blush',    // v4.1: a calm plain colour to start; the patterns are one tap away
     backdrops: [...ASK_RUTH_BACKDROPS, ...stripeBackdrops('', ['#ffdafe', '#ff8eff', '#e18adf', '#8c008f', '#4a0649', '#f8f6ee']), ...cogentBackdrops('#f8f6ee', ['ruth', 'clara', 'ada'])   /* Ask Ruth: no Jimmy Jazz */],
     // first in the gallery: a pattern, an image, a solid colour, then one more
     /* v3.1 · Gradient partners: a colour picked for a gradient pairs with this one first
@@ -350,6 +350,7 @@ export const BRANDS = {
        brand template (what a first launch opens on). bg / ctaBg are backgrounds,
        badge a key of `badges`, card + tone the text style, dim the Darken wash. */
     proposals: [
+      { id: 'simple', name: 'Simple', bg: 'solid-blush', badge: 'plum', card: true, tone: 'light', ctaBg: 'solid-plum' },   // v4.1: new projects start calm
       { id: 'template', name: 'Signature', bg: 'pattern-pink', badge: 'plum', card: true, tone: 'light', ctaBg: 'solid-plum' },
       { id: 'velvet', name: 'Velvet', bg: 'velvet-burst', badge: 'cream', card: true, tone: 'dark', ctaBg: 'solid-blush' },
       { id: 'fuchsia', name: 'Fuchsia', bg: 'fuchsia-burst', badge: 'plum', card: true, tone: 'light', ctaBg: 'solid-ink' },
@@ -391,7 +392,7 @@ export const BRANDS = {
       h1: { family: "Roboto, 'Arial Black', system-ui, sans-serif", weight: 900, size: 68,
             lh: 1.16, baseline: 0.215, bullet: 0.1, bulletY: 0.27 },
     },
-    defaultBackdrop: 'mp-pattern-pink',   // what a switch to this brand opens on — like Ask Ruth's Pattern Pink
+    defaultBackdrop: 'mp-charcoal',       // v4.1: a calm plain colour to start; the patterns are one tap away
     backdrops: [...MOSHPIT_BACKDROPS, ...stripeBackdrops('mp-', ['#f1eee5', '#0bb8d9', '#046e83', '#f346db', '#262624', '#e3dfd2']), ...cogentBackdrops('#f1eee5')],
     haloColour: '#046e83',   // v3.1: a round badge's Halo starts in the brand's teal
     gradients: { 'mp-teal': 'mp-turquoise', 'mp-turquoise': 'mp-teal', 'mp-charcoal': 'mp-teal', 'mp-night': 'mp-charcoal', 'mp-pink': 'mp-teal', 'mp-paper': 'mp-sand', 'mp-sand': 'mp-paper' },   // v3.1 · Gradient partners
@@ -409,6 +410,7 @@ export const BRANDS = {
       cta:   { h1: 'Enter the pit', body: 'moshpit.dev', button: 'moshpit.dev' },
     },
     proposals: [
+      { id: 'simple', name: 'Simple', bg: 'mp-charcoal', badge: 'sticker', card: false, tone: 'light', ctaBg: 'mp-night' },   // v4.1: new projects start calm
       { id: 'template', name: 'Signature', bg: 'mp-pattern-skulls', badge: 'sticker', card: false, tone: 'light', dim: 0.35, ctaBg: 'mp-night' },
       { id: 'clara', name: 'Clara', bg: 'mp-portrait-clara-circle', badge: 'plum', card: true, tone: 'light', ctaBg: 'mp-teal' },
       { id: 'night', name: 'Night shift', bg: 'mp-night', badge: 'stickerPink', card: false, tone: 'light', ctaBg: 'mp-turquoise' },
@@ -453,7 +455,7 @@ export const BRANDS = {
       button: { bg: '#03d5ff', ink: '#0e2236', family: 'Poppins, system-ui, sans-serif', weight: 700 },
       bold:   { family: 'Bitter, Georgia, serif', weight: 700 },
     },
-    defaultBackdrop: 't4r-pattern-confetti',   // what a switch to this brand opens on — like Ask Ruth's Pattern Pink
+    defaultBackdrop: 't4r-mist',               // v4.1: a calm plain colour to start; the patterns are one tap away
     backdrops: [...T4R_BACKDROPS, ...stripeBackdrops('t4r-', ['#eff3f8', '#03d5ff', '#e751d2', '#2d2d6b', '#0e253f', '#ffffff']), ...cogentBackdrops('#eff3f8')],
     haloColour: '#2b6a83',   // v3.1: a round badge's Halo (the teal ring of the Figma badges)
     gradients: { 't4r-navy': 't4r-violet', 't4r-violet': 't4r-pink', 't4r-cyan': 't4r-pink', 't4r-pink': 't4r-violet', 't4r-black': 't4r-navy', 't4r-mist': 't4r-white', 't4r-white': 't4r-mist' },   // v3.1 · Gradient partners (cyan → pink is the logo's)
@@ -471,6 +473,7 @@ export const BRANDS = {
       cta:   { h1: 'Follow the experiments', body: 'Link in bio', button: 'Follow the lab' },
     },
     proposals: [
+      { id: 'simple', name: 'Simple', bg: 't4r-mist', badge: 'rSticker', card: true, tone: 'dark', ctaBg: 't4r-navy' },   // v4.1: new projects start calm
       { id: 'template', name: 'Signature', bg: 't4r-portrait-jimmy', badge: 'rSticker', card: true, tone: 'dark', dim: 0.3, ctaBg: 't4r-navy' },
       { id: 'confetti', name: 'Confetti', bg: 't4r-pattern-confetti', badge: 'plum', card: true, tone: 'light', ctaBg: 't4r-violet' },
       { id: 'navy', name: 'Navy', bg: 't4r-navy', badge: 'claraGold', card: false, tone: 'light', ctaBg: 't4r-cyan' },
