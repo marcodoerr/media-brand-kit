@@ -9869,7 +9869,19 @@ function renderButtons() {
       slider('strokeW', 'Stroke', 0, 16, 1, lk.strokeW || 0, (v) => (v ? `${v} px` : 'Off')),
       slider('radius', 'Corners', 0, 1, 0.01, r, (v) => (v >= 0.995 ? 'Pill' : v <= 0.005 ? 'Square' : `${Math.round(v * 100)}%`)),
     );
-    looks.append(gate.row, gate.box, slider('scale', 'Scale', 0.6, 1.6, 0.02, lk.scale || 1, (v) => `${Math.round(v * 100)}%`));
+    // v4.1 · Style: the brand's standard button, or its Luxury version (light / dark ground picked automatically)
+    const styleRow = document.createElement('div');
+    styleRow.className = 'btn-style-row';
+    styleRow.innerHTML = `<span class="lbl lbl-sub">Style</span><div class="segments segments-sm btn-style" role="radiogroup" aria-label="Button ${k + 1} style">
+      <button type="button" role="radio" data-st="standard" aria-checked="${lk.style !== 'luxury'}">Standard</button>
+      <button type="button" role="radio" data-st="luxury" aria-checked="${lk.style === 'luxury'}">Luxury</button></div>`;
+    for (const sb of styleRow.querySelectorAll('[data-st]')) sb.addEventListener('click', () => {
+      if ((lk.style === 'luxury') === (sb.dataset.st === 'luxury')) return;
+      lk.style = sb.dataset.st === 'luxury' ? 'luxury' : 'standard';
+      selected = `bt:${b.id}`;
+      commitScene(); save(); renderButtons(); draw();
+    });
+    looks.append(styleRow, gate.row, gate.box, slider('scale', 'Scale', 0.6, 1.6, 0.02, lk.scale || 1, (v) => `${Math.round(v * 100)}%`));
     row.append(head, showOnRow(`bt:${b.id}`), field, looks);
     {
       /* back to default: the brand's button colours, no stroke, its corners, 100 % —

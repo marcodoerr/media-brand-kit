@@ -3744,3 +3744,7 @@ html.is-fs-preview .hist-fs { display: none; }
   .cap-line input { height: 44px; }
   .cap-jump, .cap-del { width: 34px; height: 34px; }
 }
+/* v4.1 · button Style: Standard | Luxury */
+.btn-style-row { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 10px; margin: 6px 0 4px; }
+.btn-style { display: flex; }
+.btn-style button { flex: 1; }
