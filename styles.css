@@ -2850,8 +2850,7 @@ html.is-home { overflow: hidden; }
 #thumbs[data-k="pattern"] > .thumb-wrap:not([data-k="pattern"]),
 #thumbs[data-k="image"] > .thumb-wrap:not([data-k="image"]),
 #thumbs[data-k="cogent"] > .thumb-wrap:not([data-k="cogent"]),
-#thumbs[data-k="colour"] > .thumb-wrap { display: none !important; }
-#group-background[data-k="colour"] #thumbs,
+#thumbs[data-k="colour"] > .thumb-wrap:not(:has(> .thumb:is([data-id$="stripes-classic"], [data-id$="stripes-brand"]))) { display: none !important; }   /* Color: only the striped bands (plain colours are the swatch row) */
 #group-background[data-k="colour"] #bg-show-all,
 #group-background[data-k="colour"] .bg-change-head,
 #group-background:not([data-k="image"]):not([data-k="pattern"]) .upload-row,
@@ -2859,6 +2858,14 @@ html.is-home { overflow: hidden; }
 #group-background:not([data-k="colour"]) #grad-controls,
 #picker:not([data-k="colour"]) #picker-colours { display: none !important; }
 #group-background[data-k="colour"] #bg-colours { margin-top: 12px; }
+/* v4.1 · the striped bands live under Color: colours, Gradient, then the bands */
+#group-background[data-k="colour"] .bg-gallery { display: flex; flex-direction: column; }
+#group-background[data-k="colour"] #bg-colours { order: 1; }
+#group-background[data-k="colour"] #grad-controls { order: 2; }
+#group-background[data-k="colour"] #thumbs { order: 3; margin-top: 14px; flex-wrap: wrap; overflow: visible; }
+#group-background[data-k="colour"] #thumbs:not(:has(> .thumb-wrap > .thumb:is([data-id$="stripes-classic"], [data-id$="stripes-brand"]))) { display: none; }
+#group-background[data-k="colour"] #thumbs::before { content: "Stripes"; grid-column: 1 / -1; flex: 0 0 100%; width: 100%; margin-bottom: 2px; font: 600 11px/1 Poppins, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--txt-dim); }
+.grad[hidden] { display: none; }
 /* a kind's controls show on its own tab only */
 #group-background:not(.k-match) :is(#tile-controls, #image-controls, #upload-fit, #video-controls, #cogent-controls) { display: none !important; }
 

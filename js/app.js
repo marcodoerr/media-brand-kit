@@ -8747,7 +8747,7 @@ function pickColour(id) {
    background in use; picking another background follows it. Tone down stays on top,
    for every kind. A colour can become a brand-safe Gradient (backdrops.js: gradientBd).
    Patterns — the brand's and an upload used as one — get Scale, Spacing and Offset rows. */
-const bgKindOf = (bd) => (!bd ? 'pattern' : bd.kind === 'solid' || bd.kind === 'gradient' ? 'colour' : bd.kind === 'tile' ? 'pattern' : bd.kind === 'cogent' ? 'cogent'
+const bgKindOf = (bd) => (!bd ? 'pattern' : bd.kind === 'solid' || bd.kind === 'gradient' || bd.stripes ? 'colour'   /* v4.1: striped bands are colours */ : bd.kind === 'tile' ? 'pattern' : bd.kind === 'cogent' ? 'cogent'
   : bd.upload && state.adjust[bd.id] && state.adjust[bd.id].pattern ? 'pattern' : 'image');   // v3.1: an upload used as a pattern is listed under Pattern
 let bgKind = null;          // the tab open in Background
 let bgKindFor = null;       // …and the background it was opened for (a new pick resets it)
@@ -8773,7 +8773,7 @@ function boxTextOnPattern() {
 }
 function bgKindsAvailable() {
   const ks = new Set(['colour', 'image']);
-  if (builtIns().some((b) => b.kind === 'tile' && b.listed !== false)) ks.add('pattern');
+  if (builtIns().some((b) => b.kind === 'tile' && !b.stripes && b.listed !== false)) ks.add('pattern');
   if (builtIns().some((b) => b.kind === 'cogent')) ks.add('cogent');
   return ks;
 }
@@ -8882,6 +8882,7 @@ function syncBgInspector() {
   g.classList.toggle('k-match', bgKindOf(cur) === bgKind);
   // gradient
   const grad = cur.kind === 'gradient';
+  $('#grad-controls').hidden = !!cur.stripes;   // v4.1: a gradient is for a plain colour, not the bands
   $('#tg-grad').checked = grad;
   $('#grad-body').hidden = !grad;
   if (!$('#grad-to .swatches').children.length || $('#grad-to').dataset.brand !== activeBrand().id || $('#grad-to').dataset.n !== String(customColors.length)) {
