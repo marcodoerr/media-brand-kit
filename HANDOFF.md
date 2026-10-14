@@ -1098,3 +1098,15 @@ Regression:
 - Safari / Firefox / iOS are not tested here: only Chromium was available.
 - The multi-select right after closing a clip menu with Esc didn't register in one test (it also happens on v3.25).
 - PPTX is not offered.
+
+## 50. Releases (Marco, 2026-10-13)
+
+- **Release 1 = v4.0 (this branch, PR #1).** This release covers making the existing editor reliable and polished, including video reliability and the Release 1 backend work. It adds no AI services, Design Cogents, Smart Templates or AI dependencies. `js/v4/model.js` is plain data (stable ids, locks, scoped Undo), and nothing calls a model.
+- **To publish:** a verified Netlify Deploy Preview, then Marco's explicit approval, then the merge to `main`. The rollback point is in ROLLBACK.md.
+- **Video status for Release 1:** works in the browser within the stated limits (300 MB per clip, 4096 px, 10 min, 1.2 GB per design), tested in Chromium only. There is no backend yet (BACKEND.md), so there is no shared media and no server render. Don't call video editing production-ready on Safari or iPhone until it is checked on those devices.
+- **Coordination:** the developer's own video-crash and backend work goes through GitHub too. Branch from `feature/v4-navigation-adapt-export`, or review PR #1 first; §49 lists every file it touches.
+- **Release 2 (Smart Templates, Design Cogent, AI analysis)** starts only after Release 1 is approved:
+  - a new branch from the approved production commit
+  - its own Deploy Preview
+  - features behind flags
+  - an audit of brand assets and agent infrastructure, and a check of AI API access and costs, before any integration
