@@ -19,6 +19,8 @@ import { installImportGuard, installDecoderBudget, reportUnplayable } from './v4
 import { watchPersistence, installFaultGuard, persistence, onPersistence } from './v4/guard.js';
 import { plan as adaptPlan, isPureAuto } from './v4/adapt.js';
 import { pdfOf } from './v4/pdf.js';
+import { describe as describeProject, scopedChange } from './v4/model.js';
+import { isAvailable as backendReady } from './v4/backend.js';
 
 const $ = (sel) => document.querySelector(sel);
 const STORAGE_KEY = 'askruth.backdrop-studio.v2';
@@ -9370,6 +9372,7 @@ async function boot() {
     const vm = pickVideoMime();
     const vs = $('#kind-video-sub'); if (vs) vs.textContent = !vm ? 'Not in this browser' : vm.startsWith('video/mp4') ? 'MP4' : 'WebM';
     $('#sheet-video').hidden = k !== 'video';
+    const sr = $('#server-render-note'); if (sr) { sr.hidden = k !== 'video'; sr.textContent = backendReady() ? '' : 'Server rendering (full quality, any length, no waiting) is not set up yet. Videos record here, in this browser, in real time.'; }
     $('#sheet-mute-row').hidden = !primaryVideoId();
     $('#sheet-mute').checked = state.video.muted;
     const ci = coverIndex();
@@ -13270,7 +13273,7 @@ function wireV4() {
   setTimeout(() => reportUnplayable(api, mediaFor), 1500);
   wireV4Nav();
   wireV4Adapt();
-  if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence, plan: (f) => planAdapt(f), apply: (f) => applyAdapt(planAdapt(f), f || state.format) };
+  if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence, model: () => describeProject(state), scoped: (scope, label, fn) => scopedChange({ state: () => state, pushUndo, commitScene, save, draw, renderScenes }, scope, label, fn), plan: (f) => planAdapt(f), apply: (f) => applyAdapt(planAdapt(f), f || state.format) };
   // a background that can't be painted: the base colour stands in (render.js) and we say so once
   let told = 0;
   renderHooks.fault = (err, where) => {

@@ -119,7 +119,7 @@ function dismiss(it) {
 function setPhase(it, phase, extra = {}) {
   Object.assign(it, extra, { phase });
   renderItem(it);
-  if (phase === 'done' || phase === 'cancelled') setTimeout(() => { if (it.phase === phase) dismiss(it); }, phase === 'done' && !it.msg ? 2600 : 6000);
+  if (phase === 'done' || phase === 'cancelled') setTimeout(() => { if (it.phase === phase) dismiss(it); }, phase === 'done' && !it.msg && !it.hint ? 2600 : 6000);
 }
 function cancel(it) {
   if (it.ctrl) it.ctrl.abort();
@@ -252,7 +252,7 @@ async function run(list) {
         setPhase(it, 'local', { msg: 'This browser couldn’t store it (storage full, or a private window). It works until you close this tab.', hint: 'Free some space and add it again to keep it.' });
         return;
       }
-      setPhase(it, 'done');
+      setPhase(it, 'done', { hint: it.hint || 'Kept in this browser only. Cloud upload isn\u2019t set up yet, so teammates can\u2019t open it from their computers.' });
     });
   }
   journal(null);
