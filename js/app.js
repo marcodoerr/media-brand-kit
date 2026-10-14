@@ -17,6 +17,7 @@ import {
 } from './store.js';
 import { installImportGuard, installDecoderBudget, reportUnplayable } from './v4/importer.js';
 import { watchPersistence, installFaultGuard, persistence, onPersistence } from './v4/guard.js';
+import { plan as adaptPlan, isPureAuto } from './v4/adapt.js';
 
 const $ = (sel) => document.querySelector(sel);
 const STORAGE_KEY = 'askruth.backdrop-studio.v2';
@@ -1656,6 +1657,10 @@ function openClipMenu(i) {
   if (!carousel) items.push({ icon: 'cover', label: 'Save as cover image', run: () => exportCover(i, 1) });
   if (sectionHasContent(i)) items.push({ icon: 'tidy', label: 'Tidy up', sub: 'Centred, evenly spaced — in this format', run: () => { if (i !== state.scene) selectScene(i); tidySection(); } });
   if (sectionHasContent(i)) items.push({ icon: 'clear', label: 'Clear section', sub: 'Text, buttons, media, badge — the background stays', run: () => clearSection(i) });
+  // v4 · a locked section keeps its layout and its text: Tidy up and Adapt layout leave it alone
+  items.push({ icon: sc.locked ? 'edit' : 'safe', label: sc.locked ? 'Unlock layout' : 'Lock layout', sub: sc.locked ? 'Tidy up and Adapt layout can change it again' : 'Tidy up and Adapt layout leave this section as it is',
+    run: () => { commitScene(); sc.locked = !sc.locked; save(); renderScenes(); showToast(sc.locked ? `${sceneName(sc, i)} locked` : `${sceneName(sc, i)} unlocked`); } });
+  if (sc.auto && isPureAuto(sc)) items.push({ icon: 'note', label: 'Made by Adapt layout', sub: 'Holds the rest of the section before it · it merges back when there is room', run: () => {} });
   if (state.scenes.length > 1) {
     items.push({ icon: 'remove', label: 'Remove this section', danger: true, run: () => { stopPlayback(); removeScene(i); } });
   }
@@ -5450,7 +5455,7 @@ function sectionHasContent(i) {
    bottom, with even gaps. Badges, buttons and media that sit next to each other
    in that order share a row when they fit side by side (spread evenly, centred);
    text always has a row of its own. Nothing is resized. Undo puts it back. */
-function tidySection() {
+function tidySectionRaw() {
   const W = canvas.width, H = canvas.height;
   const sa = safeArea(state.format, W, H);
   const pos = state.pos[state.format];
@@ -6672,7 +6677,7 @@ function followLayout(k, src, to) {
 /** Fit what is on the loaded section into the safe area of W × H: everything inside it,
     and where things overlap, re-spaced top to bottom in the order they are in
     (side by side stays side by side; each keeps its left-right spot). */
-function fitLayout(W, H) {
+function fitLayoutRaw(W, H) {
   const sa = safeArea(state.format, W, H);
   const keys = () => {
     const L = layout(ctx, state, W, H);
@@ -13122,7 +13127,8 @@ function wireV4() {
   installDecoderBudget(api, mediaFor);
   setTimeout(() => reportUnplayable(api, mediaFor), 1500);
   wireV4Nav();
-  if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence };
+  wireV4Adapt();
+  if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence, plan: (f) => planAdapt(f), apply: (f) => applyAdapt(planAdapt(f), f || state.format) };
   // a background that can't be painted: the base colour stands in (render.js) and we say so once
   let told = 0;
   renderHooks.fault = (err, where) => {
@@ -13247,4 +13253,268 @@ function wireV4Nav() {
   const sub = document.querySelector('#save-pop .save-pop-sub');
   if (sub) sub.textContent = 'The open design already saves itself in this browser. A named copy keeps this version under Saved, in All projects.';
   paintStatus();
+}
+
+/* ===== v4 · locks: an item or a section you've placed stays put ===============================
+   sc.locks = { '<element>': true } on the section ('watermark', 'text', 'inset', 'bt:id', 'md:id',
+   'eb:id', 'xb:id'); sc.locked = true keeps a whole section out of Tidy up and Adapt layout. */
+const lockKey = (el) => (el === 'h1' || el === 'body' ? 'text' : String(el || '').replace(/^(xb:[^:]+):.*$/, '$1'));
+function sceneLocks(sc = state.scenes && state.scenes[state.scene]) { return (sc && sc.locks) || {}; }
+function isLocked(el, sc) { return !!sceneLocks(sc)[lockKey(el)]; }
+function setLocked(el, on) {
+  const sc = state.scenes[state.scene];
+  if (!sc) return;
+  sc.locks = { ...(sc.locks || {}) };
+  if (on) sc.locks[lockKey(el)] = true; else delete sc.locks[lockKey(el)];
+  save();
+  draw();
+  showToast(on ? 'Locked: it won’t move when you drag, tidy up or adapt the layout' : 'Unlocked', 'Undo', () => setLocked(el, !on), 4000);
+}
+const LIST_OF = { bt: 'buttons', xb: 'blocks', md: 'media', eb: 'badges' };
+function lockedSnapshot() {
+  const out = [];
+  const locks = sceneLocks();
+  const pos = state.pos && state.pos[state.format];
+  for (const k of Object.keys(locks)) {
+    if (OWN_POS.includes(k)) { if (pos && pos[k]) out.push({ k, v: clone(pos[k]) }); continue; }
+    const [pre, id] = k.split(':');
+    const it = (state[LIST_OF[pre]] || []).find((x) => x.id === id);
+    if (it) out.push({ k, it, v: { x: it.x, y: it.y } });
+  }
+  return out;
+}
+function restoreLocked(snap) {
+  const pos = state.pos && state.pos[state.format];
+  for (const s of snap) {
+    if (s.it) { s.it.x = s.v.x; s.it.y = s.v.y; if (s.it.at) s.it.at[state.format] = { ...s.v }; }
+    else if (pos) pos[s.k] = clone(s.v);
+  }
+}
+function tidySection() {
+  const sc = state.scenes && state.scenes[state.scene];
+  if (sc && sc.locked) { showToast('This section’s layout is locked · unlock it from its menu on the timeline'); return false; }
+  const keep = lockedSnapshot();
+  const r = tidySectionRaw();
+  if (keep.length) { restoreLocked(keep); commitScene(); save(); draw(); }
+  return r;
+}
+function fitLayout(W, H) {
+  const sc = state.scenes && state.scenes[state.scene];
+  if (sc && sc.locked) return;
+  const keep = lockedSnapshot();
+  fitLayoutRaw(W, H);
+  if (keep.length) restoreLocked(keep);
+}
+
+/* ===== v4 · Adapt layout: spread or gather text when the size changes =========================
+   See v4/adapt.js for the rules. Planned against the target size, shown first ("3 sections → 5"),
+   applied as one Undo. Runs only when the format changes or you ask — never on a window resize. */
+const unitWord = (n) => (state.contentType === 'carousel' ? (n === 1 ? 'slide' : 'slides') : (n === 1 ? 'section' : 'sections'));
+function contFrom(parent, text, sep) {
+  const c = clone(parent);
+  c.id = `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  c.role = 'value';
+  c.h1 = '';
+  c.body = text;
+  c.buttons = []; c.media = []; c.badges = []; c.blocks = []; c.drawings = [];
+  c.inset = NO_CARD();
+  c.badge = 'none';
+  c.visibility = 'both';
+  c.auto = { from: parent.id, sep: sep || '\n' };
+  c.manual = false;
+  c.locked = false;
+  delete c.locks; delete c.edited; delete c.sound;
+  return c;
+}
+/** How much height a section needs at `fmt`, against what the safe area gives. */
+function adaptMeasure(fmt) {
+  const { w: W, h: H } = FORMATS[fmt];
+  const memo = new Map();
+  return (kind, k, text) => {
+    const key = `${kind}|${k}|${text}`;
+    if (memo.has(key)) return memo.get(key);
+    const r = inSandbox(() => {
+      state.scenes = clone(state.scenes);
+      state.format = fmt;
+      let idx = k;
+      if (kind === 'cont') { state.scenes.splice(k + 1, 0, contFrom(state.scenes[k], text, '\n')); idx = k + 1; }
+      else state.scenes[k].body = text;
+      state.scene = idx;
+      loadScene(idx);
+      state.pos[fmt] = state.pos[fmt] || clone(DEFAULT_POS[fmt] || DEFAULT_POS['9x16']);
+      const L = layout(ctx, state, W, H);
+      const sa = safeArea(fmt, W, H);
+      const keys = [...OWN_POS, ...(L.xbadges || []).map((b) => `eb:${b.id}`), ...(L.buttons || []).map((b) => `bt:${b.id}`),
+        ...(L.media || []).map((m) => `md:${m.id}`), ...(L.extras || []).map((x) => `xb:${x.id}`)];
+      const rects = keys.map((kk) => multiRect(kk, L)).filter((x) => x && x.w > 0 && x.h > 0).sort((a, b) => a.y - b.y);
+      // items side by side share a row (as Tidy up and fitting treat them)
+      const rows = [];
+      for (const b of rects) {
+        const row = rows[rows.length - 1];
+        if (row && b.y < row.y + row.h && row.items.every((o) => b.x >= o.x + o.w || o.x >= b.x + b.w)) { row.items.push(b); row.h = Math.max(row.h, b.y + b.h - row.y); }
+        else rows.push({ y: b.y, h: b.h, items: [b] });
+      }
+      const gap = H * 0.012;
+      const need = rows.reduce((t, x) => t + x.h, 0) + gap * Math.max(0, rows.length - 1);
+      return { need, avail: sa.h };
+    });
+    memo.set(key, r);
+    return r;
+  };
+}
+function planAdapt(fmt = state.format) {
+  commitScene();
+  return adaptPlan(state.scenes, adaptMeasure(fmt));
+}
+/** Fit section k at fmt into its safe area, written into the section (like followLayout). */
+function fitSectionAt(k, fmt) {
+  inSandbox(() => {
+    state.format = fmt;
+    state.scene = k;
+    loadScene(k);
+    const sc = state.scenes[k];
+    state.pos[fmt] = state.pos[fmt] || clone(DEFAULT_POS[fmt] || DEFAULT_POS['9x16']);
+    const { w: W, h: H } = FORMATS[fmt];
+    fitLayout(W, H);
+    sc.pos = sc.pos || {};
+    sc.pos[fmt] = clone(state.pos[fmt]);
+    for (const list of Object.keys(LAYOUT_LISTS)) {
+      for (const it of state[list] || []) {
+        const own = (sc[list] || []).find((x) => x.id === it.id);
+        if (own) { own.x = it.x; own.y = it.y; own.at = own.at || {}; own.at[fmt] = { x: it.x, y: it.y }; }
+      }
+    }
+  });
+}
+function applyAdapt(p, fmt = state.format) {
+  if (!p || !p.ops.length) return false;
+  stopPlayback();
+  if (editor) closeEditor(true);
+  dropMulti();
+  commitScene();
+  const openId = state.scenes[state.scene] && state.scenes[state.scene].id;
+  pushUndo('Adapt layout');
+  const touched = new Set();
+  for (const op of [...p.ops].sort((a, b) => b.at - a.at)) {
+    state.scenes = state.scenes.filter((x) => !op.kids.includes(x.id));
+    const k = state.scenes.findIndex((x) => x.id === op.head);
+    if (k < 0) continue;
+    const head = state.scenes[k];
+    head.body = op.chunks[0].text;
+    const conts = op.chunks.slice(1).map((c) => contFrom(head, c.text, c.sep));
+    state.scenes.splice(k + 1, 0, ...conts);
+    touched.add(head.id); for (const c of conts) touched.add(c.id);
+  }
+  let open = state.scenes.findIndex((x) => x.id === openId);
+  if (open < 0) open = Math.min(state.scene, state.scenes.length - 1);
+  state.scene = open;
+  state.scenes.forEach((sc, k) => { if (touched.has(sc.id)) fitSectionAt(k, fmt); });
+  loadScene(state.scene);
+  try { autoTimes(); } catch (_) {}
+  save();
+  renderScenes();
+  syncSectionValues(true);
+  draw();
+  showToast(`Adapted for ${SIZE_NAMES[fmt]} ${fmt.replace('x', ':')}: ${p.before} → ${state.scenes.length} ${unitWord(state.scenes.length)}`, 'Undo', undoLast, 8000);
+  return true;
+}
+
+let adaptPop = null;
+function openAdapt(p = planAdapt()) {
+  const fmt = state.format;
+  if (!p.ops.length) {
+    const why = p.notes.length ? ` (${p.notes.length} section${p.notes.length > 1 ? 's' : ''} can’t be split: one paragraph, a Hook, a CTA or locked)` : '';
+    showToast(`Everything already fits ${SIZE_NAMES[fmt]} ${fmt.replace('x', ':')} at its size${why}. Nothing to change.`, null, null, 6000);
+    return;
+  }
+  if (!adaptPop) {
+    adaptPop = document.createElement('div');
+    adaptPop.id = 'adapt-pop';
+    adaptPop.className = 'save-pop adapt-pop';
+    adaptPop.setAttribute('role', 'dialog');
+    adaptPop.setAttribute('aria-modal', 'true');
+    adaptPop.setAttribute('aria-labelledby', 'adapt-title');
+    adaptPop.innerHTML = '<h2 class="save-pop-title" id="adapt-title"></h2><p class="adapt-sum" id="adapt-sum"></p><ul class="adapt-list" id="adapt-list"></ul>'
+      + '<p class="save-pop-sub adapt-rule">Text moves only between paragraphs or list items. Nothing is rewritten, shortened or removed; Hook, CTA, locked sections and your own sections stay as they are. Undo puts it all back in one step.</p>'
+      + '<div class="save-pop-row adapt-acts"><button type="button" class="btn" id="adapt-cancel">Not now</button><button type="button" class="btn btn-primary" id="adapt-apply">Adapt layout</button></div>';
+    document.body.append(adaptPop);
+    const scrim = document.createElement('div'); scrim.className = 'burger-scrim adapt-scrim'; scrim.id = 'adapt-scrim'; scrim.hidden = true;
+    document.body.append(scrim);
+    scrim.addEventListener('click', closeAdapt);
+    adaptPop.querySelector('#adapt-cancel').addEventListener('click', closeAdapt);
+    adaptPop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeAdapt(); } });
+  }
+  adaptPop.querySelector('#adapt-title').textContent = `Adapt layout to ${SIZE_NAMES[fmt]} ${fmt.replace('x', ':')}`;
+  adaptPop.querySelector('#adapt-sum').innerHTML = `<b>${p.before} ${unitWord(p.before)}</b> <span aria-hidden="true">→</span><span class="sr-only"> become </span> <b>${p.after} ${unitWord(p.after)}</b>`;
+  const ul = adaptPop.querySelector('#adapt-list');
+  ul.innerHTML = '';
+  for (const op of p.ops) {
+    const sc = state.scenes[op.at];
+    const li = document.createElement('li');
+    const name = `${sceneName(sc, op.at)}${sc.h1 ? ` “${String(sc.h1).slice(0, 32)}${String(sc.h1).length > 32 ? '…' : ''}”` : ''}`;
+    li.textContent = op.to > op.from ? `${name}: spread over ${op.to} ${unitWord(op.to)}, split between paragraphs`
+      : op.to < op.from ? `${name}: ${op.from} ${unitWord(op.from)} gathered back into ${op.to}` : `${name}: text re-spread over ${op.to} ${unitWord(op.to)}`;
+    ul.append(li);
+  }
+  for (const n of p.notes) {
+    const li = document.createElement('li'); li.className = 'is-note';
+    li.textContent = `${sceneName(state.scenes[n.at], n.at)} ${n.msg} — left as it is (edit it, or make the text smaller)`;
+    ul.append(li);
+  }
+  const apply = adaptPop.querySelector('#adapt-apply');
+  apply.onclick = () => { closeAdapt(); applyAdapt(p, fmt); };
+  adaptPop.hidden = false;
+  document.querySelector('#adapt-scrim').hidden = false;
+  apply.focus({ preventScroll: true });
+}
+function closeAdapt() {
+  if (!adaptPop || adaptPop.hidden) return;
+  adaptPop.hidden = true;
+  document.querySelector('#adapt-scrim').hidden = true;
+}
+
+function wireV4Adapt() {
+  // explicit: Adapt layout, under Tidy up
+  const tidy = $('#tidy-btn');
+  if (tidy && !$('#adapt-btn')) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tidy-btn'; b.id = 'adapt-btn';
+    b.innerHTML = '<span class="tidy-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="8" height="12" rx="1.6"/><rect x="13.5" y="8" width="7" height="7" rx="1.4"/><path d="M11.5 10h2M8 19h8"/></svg></span><span>Adapt layout<small>Spread or gather text for this size · preview first</small></span>';
+    tidy.after(b);
+    b.addEventListener('click', () => openAdapt());
+  }
+  // a real size change (never a window resize): offer it when it would change something
+  const sel = $('#format-select');
+  if (sel) sel.addEventListener('change', () => setTimeout(() => {
+    let p;
+    try { p = planAdapt(); } catch (_) { return; }
+    if (!p.ops.length) return;
+    const fmt = state.format;
+    const more = p.after > p.before;
+    showToast(more ? `Some text doesn’t fit ${SIZE_NAMES[fmt]} at its size · ${p.before} → ${p.after} ${unitWord(p.after)}`
+      : `There’s room to bring split ${unitWord(2)} back together · ${p.before} → ${p.after}`, 'Review', () => { hideToast(); openAdapt(planAdapt()); }, 10000);
+  }, 60));
+  // locks: in the item menu (right-click / long-press) and the section menu
+  const baseItemMenu = itemMenuFor;
+  itemMenuFor = (el) => {
+    const items = baseItemMenu(el);
+    if (el && el !== 'background' && fsMode !== 'preview') {
+      const on = isLocked(el);
+      items.push({ icon: on ? 'edit' : 'safe', label: on ? 'Unlock position' : 'Lock position', sub: on ? 'Drag, Tidy up and Adapt layout can move it again' : 'Stays put when you drag, tidy up or adapt the layout', run: () => setLocked(el, !on) });
+    }
+    return items;
+  };
+  // a locked item can be selected (and long-pressed for its menu), not dragged
+  const sigOfDrag = (d) => (!d ? null : d.key === 'button' ? `bt:${d.id}` : d.key === 'media' ? `md:${d.id}` : d.key === 'xbadge' ? `eb:${d.id}`
+    : d.key === 'xblock' ? `xb:${d.id}` : d.key);
+  let toldLock = 0;
+  $('#canvas-wrap').addEventListener('pointermove', (e) => {
+    if (!dragging || dragging.key === 'ground' || dragging.key === 'image') return;
+    if (!isLocked(sigOfDrag(dragging))) return;
+    e.stopImmediatePropagation();
+    if (Date.now() - toldLock > 4000 && Math.hypot(e.clientX - dragging.sx, e.clientY - dragging.sy) > TAP_SLOP) {
+      toldLock = Date.now();
+      showToast('Locked in place · right-click or long-press it to unlock', null, null, 3500);
+    }
+  }, true);
 }
