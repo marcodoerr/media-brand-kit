@@ -2,6 +2,7 @@
    app.js — state, UI wiring, dragging, export.
    ========================================================================== */
 
+import { wireAppearance } from './v4/appearance.js';
 import {
   builtIns, byId, allBackdrops, registerUpload, unregisterUpload,
   OVERLAYS, overlayStyle, DEFAULT_ADJUST, croppable, activeImage, tileScale, motifDefaults, hasBadges, badges, bareStyles, PATTERN_TILE,
@@ -13584,6 +13585,7 @@ function wireV4() {
   setTimeout(() => reportUnplayable(api, mediaFor), 1500);
   wireV4Nav();
   wireHistory();
+  wireAppearance(document.querySelector('.topbar .hist-btns') || $('#btn-new-proj'));
   wireHeaderTips();
   wireCaptions();
   wireV4Adapt();
