@@ -3626,3 +3626,23 @@ kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; 
 .sel-row input { position: absolute; top: 10px; left: 10px; z-index: 1; width: 18px; height: 18px; margin: 0; accent-color: var(--active); }
 .sel-row:has(input:checked) { border-color: var(--active); box-shadow: 0 0 0 1px var(--active); }
 .seg-scope { grid-template-columns: 1fr 1fr; }
+
+/* v4.1 · two-line pills (Export: what / file type / size) — one rule for all three rows.
+   Centred in the pill, real line spacing, one height, sub-line never wraps.
+   Colours, strokes, radius and fonts are untouched. */
+.seg-scope, .seg-size { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg-scope button, .seg-size button {
+  min-height: 48px; padding: 7px 18px; gap: 2px;
+  display: grid; align-content: center; justify-items: center; text-align: center;
+  line-height: 1.25; min-width: 0;
+}
+.seg-scope small, .seg-size small {
+  font-size: 11px; line-height: 1.25; font-weight: 400; color: var(--txt-dim);
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.seg-scope button[aria-checked="true"] small, .seg-size button[aria-checked="true"] small { color: inherit; opacity: .8; }
+/* carousels hide Video: PDF takes the full second row instead of leaving a hole */
+.seg-filetype:has(> button[hidden]) > button:last-child { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .seg-scope button, .seg-size button { padding: 7px 14px; font-size: 13px; }
+}
