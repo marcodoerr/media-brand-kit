@@ -13374,6 +13374,23 @@ function wireHistory() {
   syncUndoButtons();
 }
 
+/* v4.1 · Header tips: the top bar is icons only; each says what it does on hover / keyboard focus.
+   The native title tooltip is removed so there is only one, quicker, styled label. */
+const HEADER_TIPS = {
+  '#burger': 'Projects', '#btn-new-proj': 'New project', '#btn-save-proj': 'Save a named copy', '#btn-present': 'Preview',
+  '.tb-content-btn[data-type="video"]': 'Reel', '.tb-content-btn[data-type="carousel"]': 'Carousel',
+  '.brand-area': 'Switch brand', '.topbar-format': 'Size', '#btn-export': 'Export',
+};
+function wireHeaderTips() {
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  for (const [sel, tip] of Object.entries(HEADER_TIPS)) for (const el of document.querySelectorAll(`.topbar ${sel}`)) { el.dataset.tip = tip; el.removeAttribute('title'); }
+  for (const el of document.querySelectorAll('.topbar [data-hist]')) {
+    el.dataset.tip = el.dataset.hist === 'undo' ? `Undo  ${mac ? '⌘Z' : 'Ctrl+Z'}` : `Redo  ${mac ? '⇧⌘Z' : 'Ctrl+Shift+Z'}`;
+    el.removeAttribute('title');
+  }
+  const ex = $('#btn-export'); if (ex) delete ex.dataset.tip;   // it has its word
+}
+
 let v4Wired = false;
 function wireV4() {
   if (v4Wired) return;
@@ -13385,6 +13402,7 @@ function wireV4() {
   setTimeout(() => reportUnplayable(api, mediaFor), 1500);
   wireV4Nav();
   wireHistory();
+  wireHeaderTips();
   wireV4Adapt();
   if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence, model: () => describeProject(state), scoped: (scope, label, fn) => scopedChange({ state: () => state, pushUndo, commitScene, save, draw, renderScenes }, scope, label, fn), plan: (f) => planAdapt(f), apply: (f) => applyAdapt(planAdapt(f), f || state.format) };
   // a background that can't be painted: the base colour stands in (render.js) and we say so once
