@@ -13423,7 +13423,11 @@ let adaptPop = null;
 function openAdapt(p = planAdapt()) {
   const fmt = state.format;
   if (!p.ops.length) {
-    const why = p.notes.length ? ` (${p.notes.length} section${p.notes.length > 1 ? 's' : ''} can’t be split: one paragraph, a Hook, a CTA or locked)` : '';
+    const locked = state.scenes.filter((x) => x.locked).length;
+    const locked = state.scenes.filter((x) => x.locked).length;
+    const why = p.notes.length ? ` (${p.notes.length} ${unitWord(p.notes.length)} can’t be split: one paragraph, a Hook, a CTA or locked)`
+      : locked ? ` (${locked} locked ${unitWord(locked)} left as ${locked > 1 ? 'they are' : 'it is'})` : '';
+      : locked ? ` (${locked} locked ${unitWord(locked)} left as ${locked > 1 ? 'they are' : 'it is'})` : '';
     showToast(`Everything already fits ${SIZE_NAMES[fmt]} ${fmt.replace('x', ':')} at its size${why}. Nothing to change.`, null, null, 6000);
     return;
   }
