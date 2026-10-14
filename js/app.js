@@ -80,6 +80,9 @@ const state = {
   buttons: [],           // buttons on the screen being edited (each screen has its own) — made under Buttons only
   drawings: [],          // v3.1: drawings on the screen being edited (each screen has its own)
   safeFor: 'all',        // v3.1: where a 9:16 will be posted — its safe area (render.js SAFE_TARGETS)
+  // v4.1: a key a design saved before it doesn't have. It must exist (null) so a saved design
+  // restores — snapshot() copies every design key, and an undefined one can't be copied.
+  captions: null,
   blocks: [],            // more header + body blocks on the screen being edited (each screen has its own)
   textMode: 'both',      // Header or Header + body — remembered while the text is switched off
   borders: { h1: { w: 0, c: null }, body: { w: 0, c: null } },   // a line around the text box: width (px at 1080) and colour (null = the text's)
@@ -13262,7 +13265,7 @@ try {
   sessionStorage.removeItem('askruth.backdrop-studio.start-new');
   if (fresh || state.pristine || !hasContent(snapshot())) { startClean(); launchedClean = true; }
   else restoredOnLoad = true;
-} catch (_) { startClean(); launchedClean = true; }
+} catch (e) { console.warn("[load] the saved design could not be restored:", e && e.message); startClean(); launchedClean = true; }
 // safe-area guides are on by default now; switch them on once for older saves
 try {
   if (!localStorage.getItem('askruth.backdrop-studio.guides-on')) {
