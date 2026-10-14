@@ -12828,6 +12828,18 @@ function syncPanelPeek() {
 /* where the last tap on the canvas was (screen x) — picks the floating panel's side */
 let peekTapX = null;
 window.addEventListener('pointerdown', (e) => { peekTapX = e.target.closest && e.target.closest('#canvas-wrap, .canvas-editor') ? e.clientX : null; }, true);
+/* full screen: the open item's controls (380 px at the right) take the side away from the tap */
+{
+  let wasOpen = false;
+  new MutationObserver(() => {
+    const html = document.documentElement;
+    const open = html.classList.contains('has-open-section') && html.classList.contains('is-fs') && !isPhone();
+    if (open === wasOpen) return;
+    wasOpen = open;
+    if (open) html.classList.toggle('peek-left', peekTapX != null && peekTapX > window.innerWidth - 380 - 16 - 24);
+    else if (!html.classList.contains('panel-peek')) html.classList.remove('peek-left');
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+}
 function wirePanelSize() {
   try {
     const w = Number(localStorage.getItem(PANEL_W_KEY));

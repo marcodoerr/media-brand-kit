@@ -2187,7 +2187,9 @@ html.is-fs-preview .fs-hint { opacity: .8; }
     border: 1px solid var(--line); border-radius: 50%; background: var(--ui-toggle); color: var(--txt);
     font: 400 20px/1 Poppins, sans-serif; cursor: pointer;
   }
-  html.is-fs.has-open-section .stage { padding-right: 412px; }
+  /* v4.1 · the open item's controls float over the stage — the canvas never moves.
+     A tap where they'd cover it opens them at the left. */
+  html.is-fs.peek-left .section-sheet:not([hidden]) { right: auto; left: 16px; }
 }
 @media (max-width: 820px) {
   html.is-fs .section-sheet { z-index: 45; }
@@ -2926,9 +2928,10 @@ html.is-home .sel-del, html.is-fs-preview .sel-del { display: none; }
   html.is-resizing-panel, html.is-resizing-panel * { cursor: col-resize !important; user-select: none; }
 
   /* hidden: the preview takes the whole width; nothing left of the column */
-  html.panel-collapsed .shell { grid-template-columns: minmax(0, 1fr) 0; column-gap: 0; }
+  /* full screen has its own panel placement, so “hidden” never applies there */
+  html.panel-collapsed:not(.is-fs) .shell { grid-template-columns: minmax(0, 1fr) 0; column-gap: 0; }
   html.panel-collapsed .panel-grip { display: none; }
-  html.panel-collapsed:not(.panel-peek) .panel-controls { display: none; }
+  html.panel-collapsed:not(.panel-peek):not(.is-fs) .panel-controls { display: none; }
   /* …and a selection floats it in over the stage, the canvas staying where it is */
   html.panel-collapsed.panel-peek .panel-controls {
     position: fixed; z-index: 30; right: 20px; top: calc(var(--topbar-h, 64px) + 18px);
