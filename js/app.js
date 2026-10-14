@@ -13177,16 +13177,16 @@ document.addEventListener('keydown', (e) => {
   if (!redo) return;
   const a = document.activeElement;
   if (a && (/INPUT|TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable)) return;
-  if (!redoStack.length) return;
-  e.preventDefault();
+  e.preventDefault();   // v4.1: always ours — with nothing to redo, the browser must not act on it
+  if (!redoStack.length) { showToast('Nothing to redo', null, null, 1600); return; }
   redoLast();
 });
 document.addEventListener('keydown', (e) => {
   if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z') return;
   const a = document.activeElement;
   if (a && (/INPUT|TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable)) return;   // their own undo
-  if (!undoStack.length) return;
-  e.preventDefault();
+  e.preventDefault();   // v4.1: always ours — otherwise Safari's ⌘Z reopens a closed tab ("Undo Close Tab")
+  if (!undoStack.length) { showToast('Nothing to undo', null, null, 1600); return; }
   undoLast();
 });
 

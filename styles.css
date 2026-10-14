@@ -3601,7 +3601,7 @@ html.is-fs .stage { transition: box-shadow .2s ease-out; }
 .v4-keys div { display: grid; grid-template-columns: 96px 1fr; gap: 8px; align-items: center; }
 .v4-keys dt { display: flex; gap: 3px; align-items: center; color: var(--txt); font-size: 12px; }
 .v4-keys dd { margin: 0; font-size: 12px; }
-kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--line); background: var(--mono-bg); font: 600 11px/1 Poppins, sans-serif; color: var(--txt); }
+kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--line); background: var(--ui-field-solid, var(--mono-bg)); font: 600 11px/1 Poppins, sans-serif; color: var(--txt); }   /* v4.1: was --mono-bg — solid navy under navy text in T4R Labs */
 @media (hover: none), (max-width: 820px) { .v4-keys { display: none; } }
 /* the panel's + says what it adds */
 #add-btn span { white-space: nowrap; }
