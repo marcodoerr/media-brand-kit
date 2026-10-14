@@ -1416,7 +1416,7 @@ function smooth(ctx) {
 /* v3.13 · hooks the app sets: `frame` may draw a whole frame itself (a transition between
    two sections) by calling back into renderFrame; `afterBackground` draws over the
    background and its wash, under media, text and badges (the overlay track). */
-export const renderHooks = { frame: null, afterBackground: null, afterAll: null, drawingProgress: null };
+export const renderHooks = { frame: null, afterBackground: null, afterAll: null, drawingProgress: null, fault: null };
 export function render(ctx, W, H, state, opts = {}) {
   if (renderHooks.frame) {
     const L = renderHooks.frame(ctx, W, H, state, opts, renderFrame);
@@ -1431,7 +1431,14 @@ export function renderFrame(ctx, W, H, state, opts = {}) {
 
   ctx.save();
   ctx.clearRect(0, 0, W, H);
-  paintBackdrop(ctx, W, H, bd);
+  // v4 · a background that fails to paint (a broken clip, a picture still loading) never
+  // takes the frame down with it: the brand's base colour stands in and the app is told.
+  try { paintBackdrop(ctx, W, H, bd); }
+  catch (e) {
+    ctx.fillStyle = (bd && bd.base) || '#3b003a';
+    ctx.fillRect(0, 0, W, H);
+    if (renderHooks.fault) renderHooks.fault(e, 'background');
+  }
   ctx.restore();
 
   // the Dim wash works on every background — pattern, artwork, colour or upload

@@ -15,9 +15,18 @@ import {
   addUpload, loadUploads, removeUpload, sizeOf, isVideo, mediaFor, audioTrackFor,
   setPlayback,
 } from './store.js';
+import { installImportGuard, installDecoderBudget, reportUnplayable } from './v4/importer.js';
+import { watchPersistence, installFaultGuard, persistence, onPersistence } from './v4/guard.js';
 
 const $ = (sel) => document.querySelector(sel);
 const STORAGE_KEY = 'askruth.backdrop-studio.v2';
+watchPersistence(STORAGE_KEY);   // v4: the save status reports what the browser really wrote
+/* v4 · uploads load from IndexedDB in boot(), after the saved design is read. Until then an
+   upload id looks unknown, and the start-up healing used to replace it: every reload dropped
+   the Hook's video and the open section's video (reproduced on v3.25). Until the uploads are
+   in, an upload id is taken on trust; boot() heals whatever is really gone. */
+let uploadsLoaded = false;
+const pendingUpload = (id) => !uploadsLoaded && typeof id === 'string' && /^up_/.test(id);
 
 /* --- state --------------------------------------------------------------- */
 
@@ -601,7 +610,7 @@ function ensureScenes() {
     if (sc.overlay === undefined) sc.overlay = sc.role === 'cta' ? { style: 'dim', strength: CTA_DIM } : null;
   }
   // the Hook's background and Dim are the shared ones every other screen starts from
-  if (!state.sharedBg || byId(state.sharedBg).id !== state.sharedBg) state.sharedBg = state.backdrop;
+  if (!state.sharedBg || (!pendingUpload(state.sharedBg) && byId(state.sharedBg).id !== state.sharedBg)) state.sharedBg = state.backdrop;
   if (!state.sharedOverlay) state.sharedOverlay = clone(state.overlay);
   if (state.sharedStill === undefined) state.sharedStill = null;
   if (!(state.scene >= 0 && state.scene < state.scenes.length)) state.scene = 0;
@@ -9141,6 +9150,7 @@ async function boot() {
     // a photo card whose file is gone shouldn't leave a dangling reference
     if (state.inset.id && !stored.some((m) => m.id === state.inset.id)) state.inset.id = null;
   } catch (_) {}
+  uploadsLoaded = true;   // v4: from here on an unknown upload id really is gone
 
   // Only now can a saved id be checked — uploads exist from here on.
   if (byId(state.backdrop).id !== state.backdrop) state.backdrop = builtIns()[0].id;
@@ -9198,7 +9208,8 @@ async function boot() {
   wireFullScreen();
   wireItemExport();
   wireUploadFit();
-  wireBigClipNote();
+  // v4: the heads-up for heavy clips now comes from the import check (v4/importer.js),
+  // which reads the clip once instead of a third time
   wireTextReset();
   wireTabActivates();
   wireBadgeParts();
@@ -12986,7 +12997,17 @@ for (const d of Object.values(state.designs || {})) retireIds(d);
    panel field saves them, but the section's own copy is only written on commitScene();
    loading that stale copy on boot threw the last edits away (a header typed and then
    reloaded came back as it was). Sync the open section first. */
-try { if (Array.isArray(state.scenes) && state.scenes[state.scene]) commitScene(); } catch (_) { /* never block the launch */ }
+try {
+  if (Array.isArray(state.scenes) && state.scenes[state.scene]) {
+    // v4: the backgrounds stay exactly as saved — whether an upload is a video isn't known yet
+    const sc0 = state.scenes[state.scene];
+    const keep = { sharedBg: state.sharedBg, sharedStill: state.sharedStill, bg: sc0.bg, backdrop: state.backdrop };
+    commitScene();
+    if (pendingUpload(keep.sharedBg) || pendingUpload(keep.backdrop) || pendingUpload(keep.bg)) {
+      state.sharedBg = keep.sharedBg; state.sharedStill = keep.sharedStill; sc0.bg = keep.bg; state.backdrop = keep.backdrop;
+    }
+  }
+} catch (_) { /* never block the launch */ }
 /* Reopen what you were working on. "Start new" (in the note that says so)
    keeps the old design under Saved designs and starts clean, as before. */
 let restoredOnLoad = false;
@@ -13018,6 +13039,7 @@ Promise.all([
     // a clean start opens on the brand template (placed now: fonts and artwork are in)
     if (launchedClean && !BLANK_START) openTemplateDesign();
     await boot();
+    wireV4();
     // the start screen: continue or create (tests open ?debug and go straight to the editor)
     setTimeout(fillBrandStills, 1500);   // the loaded brand's designs that never got a still
     // v3.7: coming back to the app always starts on Home (the design is saved and first under Recent)
@@ -13032,3 +13054,56 @@ Promise.all([
     document.fonts.ready.then(() => { buildThumbs(); draw(); });
   });
 
+
+/* ===== v4 · video import you can trust, and a design that never goes blank =====================
+   See v4/media.js for the diagnosis. Nothing here edits a protected function: the import check
+   sits in front of the file inputs (capture listeners), the decoder budget pauses clips the open
+   design doesn't use, and the guard reports faults instead of failing silently. */
+function v4Api() {
+  return {
+    STORAGE_KEY,
+    state: () => state,
+    showToast,
+    draw,
+    persistNow,
+    canvas,
+    busy: () => !!(recording || sequencing),
+    afterImport: () => { try { showStorage(); } catch (_) {} },
+  };
+}
+let v4Wired = false;
+function wireV4() {
+  if (v4Wired) return;
+  v4Wired = true;
+  const api = v4Api();
+  installFaultGuard(api);
+  installImportGuard(api);
+  installDecoderBudget(api, mediaFor);
+  setTimeout(() => reportUnplayable(api, mediaFor), 1500);
+  if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence };
+  // a background that can't be painted: the base colour stands in (render.js) and we say so once
+  let told = 0;
+  renderHooks.fault = (err, where) => {
+    if (Date.now() - told < 20000) return;
+    told = Date.now();
+    showToast('This background couldn\u2019t be drawn, so its base colour is showing. Pick it again or choose another.', null, null, 9000);
+  };
+  // preview only: a clip whose picture this browser can't decode says so on the canvas
+  const prevAfterBg = renderHooks.afterBackground;
+  renderHooks.afterBackground = (g, W, H, st, opts) => {
+    if (prevAfterBg) prevAfterBg(g, W, H, st, opts);
+    if (g.canvas !== canvas) return;
+    const m = st.backdrop && mediaFor(st.backdrop);
+    if (!m || m.media !== 'video' || (m.w && m.h)) return;
+    g.save();
+    g.fillStyle = 'rgba(0,0,0,.35)';
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = '#fff';
+    g.font = `600 ${Math.round(W * 0.034)}px Poppins, sans-serif`;
+    g.textAlign = 'center';
+    g.fillText('This video can\u2019t be shown in this browser', W / 2, H / 2 - W * 0.03);
+    g.font = `400 ${Math.round(W * 0.026)}px Poppins, sans-serif`;
+    g.fillText('Replace it with an MP4 (H.264) copy', W / 2, H / 2 + W * 0.03);
+    g.restore();
+  };
+}
