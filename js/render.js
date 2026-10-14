@@ -1484,21 +1484,37 @@ export function renderFrame(ctx, W, H, state, opts = {}) {
   if (renderHooks.afterAll) renderHooks.afterAll(ctx, W, H, state, opts);
 
   L.badgePart = opts.badgePart || null;
-  if (opts.selected && !opts.handles) drawSelection(ctx, L, opts.selected, opts.px, opts.accent, opts.note);
-  if (!opts.handles) for (const m of opts.multi || []) if (m !== opts.selected) drawSelection(ctx, L, m, opts.px, opts.accent);
+  // v4 · the selection stays visible while hovering; only a drag in progress hides it
+  const hideSel = !!opts.dragNow || (opts.handles && opts.dragNow === undefined);
+  if (opts.selected && !hideSel) drawSelection(ctx, L, opts.selected, opts.px, opts.accent, opts.note);
+  if (!hideSel) for (const m of opts.multi || []) if (m !== opts.selected) drawSelection(ctx, L, m, opts.px, opts.accent);
 
   if (opts.handles) {
     ctx.save();
     ctx.setLineDash([10, 8]);
-    ctx.lineWidth = Math.max(2, W / 600);
-    ctx.strokeStyle = 'rgba(255,142,255,0.9)';
-    if (L.ins.image) ctx.strokeRect(L.insRect.x, L.insRect.y, L.ins.w, L.ins.h);
-    if (L.wm.image) ctx.strokeRect(L.wmRect.x, L.wmRect.y, L.wmRect.w, L.wmRect.h);
-    if (!L.tx.empty) ctx.strokeRect(L.txRect.x, L.txRect.y, L.txRect.w, L.tx.h);
-    for (const x of L.extras || []) ctx.strokeRect(x.txRect.x, x.txRect.y, x.txRect.w, x.tx.h);
-    for (const b of L.buttons || []) ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
-    for (const m of L.media || []) ctx.strokeRect(m.insRect.x, m.insRect.y, m.ins.w, m.ins.h);
-    for (const b of L.xbadges || []) ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+    const lw = Math.max(2, W / 600);
+    // v4 · a dark twin under the pink, so the outlines read on light patterns too
+    const all = (stroke) => {
+      if (L.ins.image) stroke(L.insRect.x, L.insRect.y, L.ins.w, L.ins.h);
+      if (L.wm.image) stroke(L.wmRect.x, L.wmRect.y, L.wmRect.w, L.wmRect.h);
+      if (!L.tx.empty) stroke(L.txRect.x, L.txRect.y, L.txRect.w, L.tx.h);
+      for (const x of L.extras || []) stroke(x.txRect.x, x.txRect.y, x.txRect.w, x.tx.h);
+      for (const b of L.buttons || []) stroke(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+      for (const m of L.media || []) stroke(m.insRect.x, m.insRect.y, m.ins.w, m.ins.h);
+      for (const b of L.xbadges || []) stroke(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+    };
+    ctx.lineWidth = lw * 2; ctx.strokeStyle = 'rgba(20,0,20,0.35)'; all((x, y, w, h) => ctx.strokeRect(x, y, w, h));
+    ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(255,142,255,0.9)'; all((x, y, w, h) => ctx.strokeRect(x, y, w, h));
+    ctx.restore();
+  }
+  // v4 · the item under the pointer: a solid, clearly brighter outline (editor only)
+  if (opts.hoverRect && !opts.dragNow) {
+    const r = opts.hoverRect, u = opts.px || 1, o = 4 * u;
+    ctx.save();
+    ctx.lineWidth = 4 * u; ctx.strokeStyle = 'rgba(20,0,20,0.45)';
+    roundRect(ctx, r.x - o, r.y - o, r.w + o * 2, r.h + o * 2, 8 * u); ctx.stroke();
+    ctx.lineWidth = 2 * u; ctx.strokeStyle = '#ffffff';   // white: the selection keeps the section's colour
+    roundRect(ctx, r.x - o, r.y - o, r.w + o * 2, r.h + o * 2, 8 * u); ctx.stroke();
     ctx.restore();
   }
 

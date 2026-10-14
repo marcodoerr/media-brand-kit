@@ -458,6 +458,8 @@ function paint(arg) {
     accent: categoryOf(),              // the section's category colour — editor only
     note: editor || clean ? null : selectionNote(),   // "On 3 sections" for a shared item
     handles: !clean && ((dragging && dragging.moved) || (hovering && !editor)),
+    dragNow: !!(dragging && dragging.moved),
+    hoverRect: !clean && hovering && !editor && !dragging && hoverHit && hoverHit.sig !== selected ? hoverHit.r : null,
     editing: editor && editor.key,
   });
   if (editor) placeEditor();
@@ -1512,6 +1514,7 @@ function duplicateSection(i) {
 let clipMenuFor = -1;
 
 const MENU_ICONS = {
+  save: '<svg viewBox="0 0 24 24"><path d="M5 4.5h11l3.5 3.5v11a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V6A1.5 1.5 0 0 1 6 4.5z"/><path d="M8 4.5v5h7v-5M8 20.5v-6h8v6"/></svg>',
   add: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   left: '<svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>',
   right: '<svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
@@ -4365,27 +4368,53 @@ const KIND_ICONS = {
   video: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5 21 8v8l-5-2.5z"/></svg>',
   carousel: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="11" height="14" rx="2"/><path d="M3 8v8M21 8v8"/></svg>',
 };
+/* v4 · Size names say what the shape is; Reel / Carousel is its own control (syncContentTabs). */
+const SIZE_NAMES = { '9x16': 'Vertical', '3x4': 'Tall', '4x5': 'Portrait', '1x1': 'Square', '16x9': 'Landscape' };
 function syncFormatTab() {
   const src = $('#format-select'), dst = $('#tab-format-select');
   if (!src || !dst) return;
-  if (dst.innerHTML !== src.innerHTML) dst.innerHTML = src.innerHTML;
-  dst.value = src.value;
   const [type, key] = (src.value || 'video:9x16').split(':');
   const f = FORMATS[key] || FORMATS['9x16'];
-  const kind = type === 'carousel' ? 'Carousel' : 'Video';
+  const kind = type === 'carousel' ? 'Carousel' : 'Reel';
+  const optSig = `${type}`;
+  if (dst.dataset.sig !== optSig) {
+    dst.dataset.sig = optSig;
+    dst.innerHTML = '';
+    for (const k of CONTENT_FORMATS[type] || CONTENT_FORMATS.video) {
+      const o = document.createElement('option');
+      o.value = `${type}:${k}`;
+      o.textContent = `${SIZE_NAMES[k]} · ${k.replace('x', ':')} · ${FORMATS[k].sub}`;
+      dst.append(o);
+    }
+  }
+  dst.value = src.value;
   const lab = $('#tb-format-label');
   const sig = `${type}|${key}`;
   if (lab.dataset.sig !== sig) {
     lab.dataset.sig = sig;
     lab.innerHTML = '';
-    const ic = document.createElement('span'); ic.className = 'fmt-icon'; ic.innerHTML = KIND_ICONS[type === 'carousel' ? 'carousel' : 'video'];
-    const name = document.createElement('span'); name.className = 'fmt-name'; name.textContent = f.label;
+    const name = document.createElement('span'); name.className = 'fmt-name'; name.textContent = SIZE_NAMES[key] || f.label;
     const ratio = document.createElement('span'); ratio.className = 'fmt-ratio'; ratio.textContent = key.replace('x', ':');
-    lab.append(ic, name, ratio);
+    lab.append(name, ratio);
   }
-  dst.setAttribute('aria-label', `Format: ${kind}, ${f.label} ${key.replace('x', ':')} — change`);
-  const wrap = lab.closest('.topbar-format'), kick = wrap && wrap.querySelector('.brand-kicker');
-  if (wrap) { wrap.dataset.kind = kind; if (kick) kick.dataset.kind = kind; }
+  dst.setAttribute('aria-label', `Size: ${SIZE_NAMES[key]} ${key.replace('x', ':')}, ${f.sub} — change`);
+  const wrap = lab.closest('.topbar-format');
+  if (wrap) { wrap.dataset.kind = kind; wrap.title = `Size: ${SIZE_NAMES[key]} ${key.replace('x', ':')} · ${f.sub} · ${f.hint}`; }
+  syncContentTabs(type);
+}
+function syncContentTabs(type = state.contentType) {
+  for (const b of document.querySelectorAll('.tb-content-btn')) b.setAttribute('aria-checked', String(b.dataset.type === (type === 'carousel' ? 'carousel' : 'video')));
+}
+/** Reel ⇄ Carousel on the open project: the same sections, the same size. */
+function switchContent(type) {
+  const src = $('#format-select');
+  if (!src) return;
+  const key = state.format;
+  const want = `${type}:${key}`;
+  if (src.value === want) return;
+  src.value = want;
+  src.dispatchEvent(new Event('change'));
+  showToast(type === 'carousel' ? `Now a Carousel · ${state.scenes.length} slides, one per section` : `Now a Reel · ${state.scenes.length} sections on the timeline`, 'Undo', () => switchContent(type === 'carousel' ? 'video' : 'carousel'), 5000);
 }
 
 /* The format is a project setting, made once: it sits in the top bar with the
@@ -4402,6 +4431,8 @@ function wireFormatTab() {
     syncFormatTab();
     syncSectionValues(true);
   });
+  // v4 · Reel / Carousel
+  for (const b of document.querySelectorAll('.tb-content-btn')) b.addEventListener('click', () => { switchContent(b.dataset.type); syncSectionValues(true); });
 }
 
 /* --- segmented controls -------------------------------------------------- */
@@ -4436,6 +4467,7 @@ const TAP_SLOP = 6;       // screen px — a finger wobbles more than a mouse, s
 
 let dragging = null;
 let hovering = false;
+let hoverHit = null;   // v4 · what the pointer is over: { r (canvas px), sig (as `selected` names it) }
 let lastLayout = null;
 
 function toCanvas(e) {
@@ -6198,26 +6230,39 @@ function renderHome() {
   // Create new
   const cg = $('#home-create-list');
   cg.innerHTML = '';
-  // v3.1: one button per brand — Create new opens a Reel straight away (no Video / Carousel choice first)
+  // v4 · one card per brand: the card makes a Reel, and Reel / Carousel are right there (switchable later)
   for (const b of Object.values(BRANDS)) {
+    const card = document.createElement('div');
+    card.className = 'home-brand-card';
+    card.dataset.brand = b.id;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'home-brand home-new';
     btn.dataset.brand = b.id;
     btn.dataset.type = 'video';
-    const plus = document.createElement('span');
-    plus.className = 'home-plus';
-    plus.setAttribute('aria-hidden', 'true');
-    plus.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
     const nm = document.createElement('span');
     nm.className = 'home-brand-name';
     nm.textContent = b.name;
-    btn.append(brandMark(b.id), nm, plus);
-    btn.setAttribute('aria-label', `New ${b.name} design`);
+    btn.append(brandMark(b.id), nm);
+    btn.setAttribute('aria-label', `${b.name}: new Reel`);
     btn.addEventListener('click', () => createProject(b.id, 'video'));
-    cg.append(btn);
+    const kinds = document.createElement('div');
+    kinds.className = 'home-kinds';
+    for (const [type, label] of [['video', 'Reel'], ['carousel', 'Carousel']]) {
+      const k = document.createElement('button');
+      k.type = 'button';
+      k.className = 'home-kind';
+      k.dataset.type = type;
+      k.innerHTML = `${KIND_ICONS[type]}<span>${label}</span>`;
+      k.setAttribute('aria-label', `${b.name}: new ${label}`);
+      k.addEventListener('click', () => createProject(b.id, type));
+      kinds.append(k);
+    }
+    card.append(btn, kinds);
+    cg.append(card);
   }
-  $('#home-create-title').textContent = first ? 'What do you want to create?' : 'Create new';
+  $('#home-create-title').textContent = 'Choose your brand';
+  const sub = $('#home-create-sub'); if (sub) sub.textContent = 'Then a Reel or a Carousel. You can switch either, and the size, at any time.';
 }
 /* v3.1 · P0: which screen this tab is on survives a reload (sessionStorage: this tab only,
    so a new visit still opens on the start screen with the design first in Recent). */
@@ -10457,8 +10502,14 @@ function addItems(pointerType) {
   }
   items.push({ icon: 'draw', label: 'Drawing', sub: 'Draw on the canvas — lines, arrows, circles', run: () => setTimeout(() => enterDraw(null), 0) });
   if (state.contentType !== 'carousel') items.push({ icon: 'film', label: 'Overlay clip', sub: 'Media, text, a badge, a cogent or a drawing — for a moment of the film', more: true, run: () => setTimeout(() => openOverlayAddMenu(addAnchor && addAnchor.isConnected ? addAnchor : $('#fs-add-section')), 0) });
-  items.push({ sep: true });
-  items.push({ icon: 'section', label: 'Section', sub: 'Hook, Value or CTA — after this one', run: () => setTimeout(fsAddSection, 0) });
+  // v4 · sections / slides are added with their own button (the timeline's Add section), not here —
+  // except in desktop full screen, where the timeline is out of sight: then last, after a line
+  const tlVisible = !!($('#tl-add-section') && $('#tl-add-section').offsetParent);
+  if (!tlVisible) {
+    items.push({ sep: true });
+    const slide = state.contentType === 'carousel';
+    items.push({ icon: 'section', label: slide ? 'New slide' : 'New section', sub: 'Hook, Value or CTA — after this one', run: () => setTimeout(fsAddSection, 0) });
+  }
   // v3.21 · a phone starts a new project from + (it left ☰); a desktop has the button by the heart
   if (isPhone()) {
     items.push({ sep: true });
@@ -10574,9 +10625,12 @@ function renderBurger() {
     b.addEventListener('click', () => { closeBurger(); run(); });
     m.append(b);
   };
-  // v3.2 · New project, Start from a template, All projects, Recent projects, View settings
-  // v3.21: New project moved — + on a phone, the button by the heart on a desktop
-  action('copy', 'Start from a template', 'This brand’s designs · Blank · Undo goes back', () => $('#start-new').click());
+  // v4 · Projects only: new, templates, a named copy, recent, all. View settings have their own
+  // button (the grid icon by the preview, and View in the full-screen bar).
+  sec('Projects');
+  action('add', 'New project', `A new ${activeBrand().name} design · this one stays in Recent`, () => newProjectHere());
+  action('copy', 'Templates', 'Start from this brand’s designs, or Blank · Undo goes back', () => $('#start-new').click());
+  action('save', 'Save a named copy…', 'The open design also saves itself as you work', () => openSavePop());
   m.append(document.createElement('hr'));
   // v3.7 · the three latest; Show all opens every project (Recent tab first)
   const head = document.createElement('div'); head.className = 'burger-sec burger-sec-row';
@@ -10589,24 +10643,8 @@ function renderBurger() {
   m.append(head);
   if (recent.length) for (const it of recent.slice(0, 3)) m.append(burgerRow(it));
   else { const p = document.createElement('p'); p.className = 'burger-empty'; p.textContent = 'Designs you open show up here.'; m.append(p); }
-  // the view settings: the same on a phone and a desktop
   m.append(document.createElement('hr'));
-  sec('View settings');
-  for (const [id, label, sub] of [['#tg-guides', 'Safe area', 'Where platform buttons and captions stay clear'], ['#tg-grid', 'Grid', 'Centre lines, thirds, columns — dragging snaps']]) {
-    const l = document.createElement('label');
-    l.className = 'switch switch-row burger-switch';
-    l.innerHTML = `<input type="checkbox" ${$(id).checked ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span>${label}<small class="switch-sub">${sub}</small></span>`;
-    l.querySelector('input').addEventListener('change', (e) => viewToggle(id, e.target.checked));
-    m.append(l);
-  }
-  if (state.format === '9x16') {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'burger-act';
-    b.innerHTML = `<i class="clip-menu-icon" aria-hidden="true">${MENU_ICONS.safe}</i><span>Safe area for<small>${SAFE_TARGETS[state.safeFor || 'all'].label}</small></span>`;
-    b.addEventListener('click', () => { const r = b.getBoundingClientRect(); closeBurger(); openSafeForMenu({ getBoundingClientRect: () => r, isConnected: true }); });
-    m.append(b);
-  }
-  m.append(document.createElement('hr'));
+  action('film', 'All projects', `${recent.length + saved.length} in this browser · Recent and Saved`, () => openAllProjects());
   action('home', 'Home', 'The start screen · Create new', () => openHome());
 }
 /* v3.2 · All projects opens over the screen you are on; closing it takes you back there
@@ -11769,11 +11807,14 @@ function setFsMode(mode) {
   $('#fs-open').setAttribute('aria-pressed', String(!!mode));
   const pv = $('#fs-preview');
   pv.setAttribute('aria-pressed', String(mode === 'preview'));
-  $('#fs-preview-label').textContent = mode === 'preview' ? 'Edit' : 'Preview';
+  $('#fs-preview-label').textContent = mode === 'preview' ? 'Edit' : 'Present';
+  pv.setAttribute('aria-label', mode === 'preview' ? 'Back to editing' : 'Present');
+  pv.title = mode === 'preview' ? 'Back to editing (Esc)' : 'Present: exactly as it exports';
+  const tp = $('#btn-present'); if (tp) tp.setAttribute('aria-pressed', String(mode === 'preview'));
   $('#fs-play').hidden = mode !== 'preview';
   $('#fs-add-section').hidden = mode !== 'edit';
   $('#fs-hint').textContent = mode === 'preview'
-    ? (state.contentType === 'carousel' ? 'Play, swipe or use the arrows' : 'Preview — as it exports')
+    ? (state.contentType === 'carousel' ? 'Presenting · play, swipe or use the arrows · Esc to edit' : 'Presenting · exactly as it exports · Esc to edit')
     : 'Tap empty space to add · tap an item to edit';
   if (mode === 'preview') {
     if (sheetTab) closeSectionSheet({ focus: false });
@@ -13080,6 +13121,7 @@ function wireV4() {
   installImportGuard(api);
   installDecoderBudget(api, mediaFor);
   setTimeout(() => reportUnplayable(api, mediaFor), 1500);
+  wireV4Nav();
   if (new URLSearchParams(location.search).has('debug')) window.__v4 = { mediaFor, persistence };
   // a background that can't be painted: the base colour stands in (render.js) and we say so once
   let told = 0;
@@ -13106,4 +13148,103 @@ function wireV4() {
     g.fillText('Replace it with an MP4 (H.264) copy', W / 2, H / 2 + W * 0.03);
     g.restore();
   };
+}
+
+/* ===== v4 · navigation: Present, View, and a save status that tells the truth ================= */
+function wireV4Nav() {
+  // ---- hover: the item under the pointer gets its own outline ----------------------------
+  const sigOf = (h) => (!h ? null : h.key === 'button' ? `bt:${h.id}` : h.key === 'media' ? `md:${h.id}` : h.key === 'xbadge' ? `eb:${h.id}`
+    : h.key === 'xblock' ? `xb:${h.id}:${h.part === 'body' ? 'body' : 'h1'}` : h.key === 'text' ? (h.part === 'body' ? 'body' : 'h1') : h.key);
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch' || dragging || fsMode === 'preview') return;
+    const h = hitAll(toCanvas(e))[0] || null;
+    const sig = sigOf(h);
+    if ((hoverHit && hoverHit.sig) === sig) return;
+    hoverHit = h ? { r: h.r, sig } : null;
+    draw();
+  });
+  canvas.addEventListener('pointerleave', () => { if (hoverHit) { hoverHit = null; draw(); } });
+
+  // ---- Add section / Add slide: its own button, its own words -------------------------------
+  const tas = $('#tl-add-section');
+  const syncAddLabel = () => {
+    const slide = state.contentType === 'carousel';
+    const t = slide ? 'Add slide' : 'Add section';
+    if ($('#tl-add-label').textContent !== t) $('#tl-add-label').textContent = t;
+    tas.title = slide ? 'Add a slide after the one you are on' : 'Add a section after the one you are on';
+    const c = document.querySelector('.v4-chip[data-v4="section"]'); if (c && c.textContent !== t) c.textContent = t;
+  };
+  if (tas) {
+    tas.addEventListener('click', (e) => { e.stopPropagation(); addAnchor = tas; fsAddSection(); });
+    setInterval(syncAddLabel, 500); syncAddLabel();
+  }
+  // ---- the hint when nothing is selected ---------------------------------------------------
+  if (!/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) {
+    for (const k of document.querySelectorAll('.v4-keys kbd')) if (k.textContent === '⌘') k.textContent = 'Ctrl';
+  }
+  for (const b of document.querySelectorAll('.v4-chip')) b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (b.dataset.v4 === 'add') $('#add-btn').click();
+    else if (b.dataset.v4 === 'section') { addAnchor = b; fsAddSection(); }
+    else if (b.dataset.v4 === 'background') selectElement('background');
+  });
+
+  // Present (top bar): full screen, exactly as it exports
+  const pb = $('#btn-present');
+  if (pb) pb.addEventListener('click', () => { if (fsMode === 'preview') setFsMode(isPhone() ? 'edit' : null); else setFsMode('preview'); });
+  // View (by the preview): safe area and grid — canvas settings, apart from Projects
+  const vb = $('#view-btn');
+  if (vb) vb.addEventListener('click', (e) => { e.stopPropagation(); if (clipMenuFor === -6) { closeClipMenu(); return; } openViewMenu(vb); });
+  // the full-screen View button on a phone too
+  const fv = $('#fs-view');
+  if (fv && !fv.__v4) { fv.__v4 = true; }
+
+  // ---- project name + save status ----------------------------------------------------------
+  let dirtyAt = 0;
+  let saveTimer = 0;
+  const fmtTime = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const paintStatus = () => {
+    const nm = $('#ps-name'), el = $('#ps-state'), tx = $('#ps-text');
+    if (!nm || !el) return;
+    let name = 'Untitled';
+    try { name = titleOf(state); } catch (_) {}
+    if (nm.textContent !== name) nm.textContent = name;
+    const p = persistence;
+    let s = 'idle', text = 'Not saved yet';
+    if (p.state === 'error') { s = 'error'; text = `Not saved · ${p.error}`; }
+    else if (dirtyAt && (!p.at || p.at < dirtyAt)) { s = 'saving'; text = 'Saving…'; }
+    else if (p.state === 'saved') { s = 'saved'; text = p.at ? `Saved in this browser · ${fmtTime(p.at)}` : 'Saved in this browser'; }
+    el.dataset.s = s;
+    document.documentElement.classList.toggle('save-error', s === 'error');
+    if (tx.textContent !== text) tx.textContent = text;
+    $('#proj-status').title = s === 'error'
+      ? `${p.error}. Your last changes are only in this tab. Free some space (☰ Projects › delete old ones) or leave private browsing.`
+      : 'Designs are saved automatically in this browser only. Other people and other devices can\u2019t see them.';
+  };
+  onPersistence(paintStatus);
+  // any edit: mark it, and write it soon (the app saves on most edits itself; this catches the rest)
+  const touched = (e) => {
+    if (!e.target || !e.target.closest || !e.target.closest('.shell, .fs-bar, .clip-menu, .color-pop, .sheet, #section-sheet, .topbar')) return;
+    if (e.target.closest('#btn-export, #burger, #btn-present')) return;
+    dirtyAt = Date.now();
+    paintStatus();
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { try { persistNow(); } catch (_) {} paintStatus(); }, 700);
+  };
+  for (const t of ['input', 'change', 'pointerup']) document.addEventListener(t, touched, true);
+  document.addEventListener('keydown', (e) => {
+    // ⌘S / Ctrl+S: write now (and say so) instead of the browser's "Save page"
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      dirtyAt = Date.now();
+      try { persistNow(); } catch (_) {}
+      paintStatus();
+      showToast(persistence.state === 'saved' ? 'Saved in this browser' : `Not saved · ${persistence.error}`, persistence.state === 'saved' ? 'Save a named copy' : null, () => { hideToast(); openSavePop(); }, 3000);
+    }
+  });
+  setInterval(paintStatus, 15000);
+  // the save popup says how saving works
+  const sub = document.querySelector('#save-pop .save-pop-sub');
+  if (sub) sub.textContent = 'The open design already saves itself in this browser. A named copy keeps this version under Saved, in All projects.';
+  paintStatus();
 }

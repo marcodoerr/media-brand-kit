@@ -3503,3 +3503,96 @@ html.is-fs .stage { transition: box-shadow .2s ease-out; }
 .fb-actions { display: flex; gap: 6px; }
 .fb-reload { min-height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer; }
 .fb-close { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: transparent; color: var(--txt); font-size: 18px; cursor: pointer; }
+
+/* ===== v4 · navigation ======================================================================= */
+/* Projects: the menu button says what it holds */
+.burger { width: auto; min-width: 38px; padding: 0 12px 0 9px; gap: 6px; border-radius: 999px; display: inline-flex; align-items: center; }
+.burger-label { font: 600 13px/1 Poppins, sans-serif; }
+@media (max-width: 820px) { .burger { padding: 0; width: 34px; justify-content: center; } .burger-label { display: none; } }
+
+/* Content: Reel | Carousel — a segmented pair beside Brand, then Size */
+.tb-content { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; border: 1px solid var(--line); flex: none; }
+.tb-content-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--txt-dim); font: 600 13px/1 Poppins, sans-serif; cursor: pointer; transition: background-color .15s, color .15s; }
+.tb-content-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.tb-content-btn[aria-checked="true"] { background: var(--active); color: var(--on-active); }
+.tb-content-btn:not([aria-checked="true"]):hover { color: var(--txt); background: var(--active-tint); }
+.tb-content-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.topbar-format .fmt-ratio { display: inline !important; margin-left: 6px; color: var(--txt-dim); font-weight: 500; }
+
+/* the project's name and its real save state */
+.proj-status { flex: 1 1 auto; min-width: 0; display: grid; justify-items: center; gap: 1px; padding: 0 8px; text-align: center; }
+.ps-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 13px/1.3 Poppins, sans-serif; color: var(--heading); }
+.ps-state { display: inline-flex; align-items: center; gap: 6px; font: 400 11.5px/1.3 Poppins, sans-serif; color: var(--txt-dim); white-space: nowrap; }
+.ps-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--txt-dim); flex: none; }
+.ps-state[data-s="saved"] .ps-dot { background: #4ade80; }
+.ps-state[data-s="saving"] .ps-dot { background: #fbbf24; animation: ps-pulse 1s ease-in-out infinite alternate; }
+.ps-state[data-s="error"] { color: var(--error); }
+.ps-state[data-s="error"] .ps-dot { background: var(--error); }
+@keyframes ps-pulse { from { opacity: .35; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ps-state[data-s="saving"] .ps-dot { animation: none; } }
+
+/* Save copy and Present: icon + word on a wide screen */
+.save-heart.save-copy, .save-heart.present-btn { width: auto; padding: 0 14px 0 11px; gap: 7px; border-radius: 999px; display: inline-flex; align-items: center; font: 600 13px/1 Poppins, sans-serif; }
+.save-heart.present-btn[aria-pressed="true"] { border-color: var(--active); color: var(--active); }
+@media (max-width: 1180px) { .save-heart.save-copy .btn-label { display: none; } .save-heart.save-copy { width: 40px; padding: 0; justify-content: center; } }
+@media (max-width: 820px) {
+  .save-heart.save-copy, .save-heart.present-btn { display: none; }   /* phone: ☰ Projects › Save a named copy; Present is in the bar */
+  .proj-status { display: none; }
+  .tb-content { padding: 2px; }
+  .tb-content-btn { height: 30px; padding: 0 8px; }
+  .tb-content-btn span { display: none; }
+  .topbar-format .brand-kicker { display: none; }
+}
+@media (max-width: 1040px) and (min-width: 821px) { .proj-status .ps-name { display: none; } }
+/* phone: a small save dot by the brand, so a failed save is never silent */
+@media (max-width: 820px) {
+  html.save-error .burger { border-color: var(--error); box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 35%, transparent); }
+}
+
+/* View (safe area, grid) under the stage's round buttons */
+@media (min-width: 821px) {
+  .stage-inner > #view-btn { top: 132px; }
+  html.panel-collapsed:not(.is-fs) .stage-inner > #view-btn { top: calc(var(--topbar-h, 71px) + 154px); }
+}
+@media (max-width: 820px) { #view-btn { display: none; } }
+.view-btn svg { width: 18px; height: 18px; }
+
+/* Start screen: Choose your brand, then Reel or Carousel */
+.home-sub { margin: 6px 0 0; font: 400 14px/1.45 Poppins, sans-serif; color: var(--txt-dim); }
+.home-brand-card { display: grid; gap: 8px; padding: 8px; border-radius: 18px; border: 1px solid var(--line); background: var(--field-soft, rgba(255,255,255,.03)); }
+.home-brand-card:hover, .home-brand-card:focus-within { border-color: var(--active); }
+.home-brand-card > button.home-brand { border: 0; background: transparent; min-height: 52px; padding: 8px 10px; }
+.home-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.home-kind { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border-radius: 12px; border: 1px solid var(--line);
+  background: transparent; color: var(--txt); font: 600 13.5px/1 Poppins, sans-serif; cursor: pointer; transition: border-color .15s, background-color .15s; }
+.home-kind svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.home-kind:hover, .home-kind:focus-visible { border-color: var(--active); background: var(--active-tint); outline: none; }
+.home-head { flex-wrap: wrap; }
+.home-head .home-sub { flex-basis: 100%; }
+@media (max-width: 820px) {
+  .topbar-format .fmt-name { display: none; }
+  .topbar-format .fmt-ratio { margin-left: 0; color: var(--heading); font-weight: 600; }
+  .topbar-format { padding-left: 8px; }
+}
+@media (max-width: 380px) { .brand { gap: 8px; } .tb-content-btn { padding: 0 6px; } }
+/* v4 · nothing selected: a short hint and the shortcuts */
+.v4-hint { margin: 2px 0 14px; padding: 14px 16px; border-radius: 14px; border: 1px dashed var(--line); font: 400 13px/1.45 Poppins, sans-serif; color: var(--txt-dim); }
+.v4-hint-lead { margin: 0 0 10px; }
+.v4-hint-lead b { color: var(--txt); font-weight: 600; }
+.v4-hint-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.v4-chip { min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--txt); font: 600 12.5px/1 Poppins, sans-serif; cursor: pointer; }
+.v4-chip:hover, .v4-chip:focus-visible { border-color: var(--active); background: var(--active-tint); outline: none; }
+.v4-keys { display: grid; gap: 4px; margin: 0; }
+.v4-keys div { display: grid; grid-template-columns: 96px 1fr; gap: 8px; align-items: center; }
+.v4-keys dt { display: flex; gap: 3px; align-items: center; color: var(--txt); font-size: 12px; }
+.v4-keys dd { margin: 0; font-size: 12px; }
+kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; border: 1px solid var(--line); background: var(--mono-bg); font: 600 11px/1 Poppins, sans-serif; color: var(--txt); }
+@media (hover: none), (max-width: 820px) { .v4-keys { display: none; } }
+/* the panel's + says what it adds */
+#add-btn span { white-space: nowrap; }
+/* Add section / Add slide on the timeline */
+.tl-add-section { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px 0 9px; border-radius: 999px; border: 1px solid var(--tl-line, var(--line));
+  background: transparent; color: var(--tl-txt, var(--txt)); font: 600 12.5px/1 Poppins, sans-serif; cursor: pointer; flex: none; }
+.tl-add-section svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tl-add-section:hover, .tl-add-section:focus-visible { border-color: var(--active); outline: none; }

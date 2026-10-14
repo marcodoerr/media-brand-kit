@@ -21,6 +21,8 @@ function emit() { for (const fn of listeners) { try { fn(persistence); } catch (
 export function watchPersistence(key) {
   const proto = Storage.prototype;
   if (proto.__v4wrapped) return;
+  // a design already in this browser was saved by an earlier visit
+  try { if (window.localStorage.getItem(key) !== null) { persistence.state = 'saved'; persistence.at = 0; } } catch (_) {}
   const orig = proto.setItem;
   proto.setItem = function setItem(k, v) {
     if (this !== window.localStorage || k !== key) return orig.call(this, k, v);
