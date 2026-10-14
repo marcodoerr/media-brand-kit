@@ -12815,8 +12815,19 @@ function syncPanelPeek() {
   const html = document.documentElement;
   const tab = $('.panel-controls').dataset.tab;
   const peek = panelHidden() && !isPhone() && !fsMode && !!tab && tab !== 'all';
-  if (html.classList.contains('panel-peek') !== peek) { html.classList.toggle('panel-peek', peek); selDelSig = ''; relayoutStage(); }
+  if (html.classList.contains('panel-peek') !== peek) {
+    // v4.1 · the panel floats OVER the stage: the canvas keeps its size and place (no relayout).
+    // It opens at the right, or at the left when the tap was where the right-hand panel would cover it.
+    if (peek) {
+      const w = Math.min(360, window.innerWidth * 0.4);
+      html.classList.toggle('peek-left', peekTapX != null && peekTapX > window.innerWidth - w - 40);
+    } else html.classList.remove('peek-left');
+    html.classList.toggle('panel-peek', peek); selDelSig = '';
+  }
 }
+/* where the last tap on the canvas was (screen x) — picks the floating panel's side */
+let peekTapX = null;
+window.addEventListener('pointerdown', (e) => { peekTapX = e.target.closest && e.target.closest('#canvas-wrap, .canvas-editor') ? e.clientX : null; }, true);
 function wirePanelSize() {
   try {
     const w = Number(localStorage.getItem(PANEL_W_KEY));
