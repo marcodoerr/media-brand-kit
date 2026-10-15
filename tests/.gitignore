@@ -1,0 +1,6 @@
+out/
+fx/
+fontpkg/node_modules/
+__pycache__/
+*.png
+*.webm
