@@ -168,7 +168,8 @@ function store(k) {
   try { if (k >= 1) localStorage.removeItem(APPEAR_KEY); else localStorage.setItem(APPEAR_KEY, String(Math.round(k * 100))); } catch (_) {}
 }
 
-const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></svg>';
+// a water drop, half filled: saturation (the preview's light/dark toggle keeps the half-filled circle)
+const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2s-6.2 6.6-6.2 10.9a6.2 6.2 0 0 0 12.4 0C18.2 9.8 12 3.2 12 3.2z"/><path d="M12 3.2v17.1a6.2 6.2 0 0 0 6.2-6.2C18.2 9.8 12 3.2 12 3.2z" fill="currentColor" stroke="none"/></svg>';
 
 /** The header button + its Appearance dropdown. `before`: the element it goes in front of. */
 export function wireAppearance(before) {
