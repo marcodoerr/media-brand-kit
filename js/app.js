@@ -9430,7 +9430,7 @@ async function boot() {
     const video = state.contentType !== 'carousel';
     $('#sheet-title').textContent = 'Export';
     $('#sheet-type').textContent = video ? 'Video' : 'Carousel';
-    const facts = [f.label, `${f.w} × ${f.h}`];
+    const facts = [isPresentation() ? 'Presentation' : f.label, `${f.w} × ${f.h}`];   // v4.4: a Carousel at 16:9 is a Presentation
     if (video) {
       facts.push(`${sequenceSecs().toFixed(1)}s`);
       const mime = pickVideoMime();
