@@ -12210,6 +12210,18 @@ function fsElementRect(el) {
   return { left: c.left + r.x * k, top: c.top + r.y * k, width: r.w * k, height: r.h * k, right: c.left + (r.x + r.w) * k, bottom: c.top + (r.y + r.h) * k };
 }
 
+/** Eat the click a touch tap sends after its pointerup (once, within half a second). */
+function swallowFollowingClick() {
+  const until = performance.now() + 500;
+  const eat = (ev) => {
+    window.removeEventListener('click', eat, true);
+    if (performance.now() > until) return;
+    ev.stopPropagation();
+    ev.preventDefault();
+  };
+  window.addEventListener('click', eat, true);
+  setTimeout(() => window.removeEventListener('click', eat, true), 600);
+}
 function fsSelect(el) {
   closeClipMenu();
   selected = el;
@@ -13124,6 +13136,10 @@ function wireFullScreen() {
       : d.key === 'xblock' ? `xb:${d.id}:${d.part === 'body' ? 'body' : 'h1'}`
       : d.key === 'text' ? (d.part === 'body' ? 'body' : 'h1') : 'background';
     const pt = e.pointerType;
+    // A finger's click comes after this, aimed at whatever is under it by then: the sheet opening
+    // shrinks the canvas and the timeline slides up there, and that click closed the sheet again
+    // (a button or the background never opened on a phone). Swallow that one click.
+    if (pt !== 'mouse') swallowFollowingClick();
     if (el === 'background') {
       // see it → select it → edit it: empty canvas is the background (+ adds things)
       void pt;
