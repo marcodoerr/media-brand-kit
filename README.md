@@ -3,6 +3,52 @@
 Pick a backdrop, set an H1 and body, drag the pieces where you want them, export a PNG.
 No build step, no dependencies — plain HTML, CSS and ES modules.
 
+## What's new in v4.0 (2026-10-13)
+
+**Video import you can trust.** Every picture or video now goes through a check before it enters the design. The check covers:
+- the format, and whether its picture really decodes (one frame)
+- ≤ 300 MB per clip, ≤ 4096 px on the long side, ≤ 10 minutes
+- ≤ 1.2 GB of media per design, ≤ 2.4 GB in the browser, and the free storage
+
+A panel at the bottom left (at the top on a phone) shows each file:
+- *Checking → Processing → Saving in this browser → Added*, with Cancel.
+- Or *Couldn’t add*, with what to do, plus Try again or Choose another file.
+
+Also in this round:
+- Clips that the open design doesn't use are paused.
+- An import that crashed the tab is reported on the next visit, and the copy from before can be restored.
+- If something fails, a banner explains it instead of leaving a blank screen.
+- **Fixed:** every reload dropped the Hook's video and the open section's video. This bug was already in v3.25.
+
+**Navigation**
+- The start screen asks **Choose your brand**, and each brand card has **Reel** and **Carousel**.
+- The top bar separates **Content** (Reel | Carousel) from **Size** (Vertical 9:16 · Tall 3:4 · Portrait 4:5 · Square 1:1 · Landscape 16:9).
+- **Present** is in the top bar, and the eye in full screen is labelled Present.
+- **Projects** (☰) holds New project, Templates, Save a named copy, Recent and All projects. The view settings moved to their own **View** button by the preview (safe area, grid).
+- The heart is gone. The top bar shows the project name and a **save status that is only "Saved" once the browser has really written it**. **Save copy** saves a named copy. ⌘S / Ctrl+S saves now.
+
+**Editing**
+- The item under the pointer gets a white outline, and the selection keeps the section's colour.
+- With nothing selected, the panel shows a short hint, Add element / Add section / Background, and the shortcuts.
+- **+ Add element** is separate from **Add section / Add slide**, which sits on the timeline.
+- **Lock position** is in the item's right-click / long-press menu, and **Lock layout** is in the section's menu. Locked things don't move when you drag, Tidy up or Adapt layout.
+
+**Adapt layout**
+- When the size changes and text no longer fits, or there is room to bring split text back together, a toast offers **Review**.
+- The preview says, for example, "3 sections → 4" before anything changes. Applying it is one Undo.
+- Text moves only between paragraphs or list items, and is never rewritten or cut.
+- Hook, CTA, locked sections and your own sections are left alone.
+- Going back to the first size gathers the text back exactly as it was.
+- It never runs on a window resize. It is also available under Tidy up as **Adapt layout**.
+
+**Export**
+- **What to export:** Entire project · Choose (tap thumbnails) · This one · Elements (the selected items).
+- **File type:** Video (Reel) · PNG · JPG · **PDF** (one picture per page). A Carousel's images come as one **.zip** by default.
+- The full-frame option reads "Keep each element in its original position".
+- When some sections are exported as a video, overlay clips play at their own times.
+
+**Not set up (no backend yet):** cloud upload, shared media and server rendering. The app says so where they would appear. See BACKEND.md for the design, the setup and the costs.
+
 ## What's new in v3.25 (2026-10-10)
 
 - **Desktop stage buttons reordered:** the panel button (hide / show the edit column) is now on top,

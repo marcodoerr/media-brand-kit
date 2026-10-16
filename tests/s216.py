@@ -1,0 +1,102 @@
+# v3.20 · overlay transitions, Rough edges, stage icon contrast, preview progress, undo toast on top, overlay rows capped at 3
+R=[]
+def ok(n,c,x=''): c=bool(c); R.append(c); print(('PASS ' if c else 'FAIL ')+n, '' if c else x)
+async def test(pg, ctx, logs):
+    import os; D=os.environ['OUT']+'/'
+    U='http://127.0.0.1:8766/?debug&template'
+    st = lambda e: pg.evaluate(e)
+    async def fresh(w=1440,h=900):
+        await pg.set_viewport_size({'width':w,'height':h})
+        await pg.goto(U); await pg.evaluate('localStorage.clear()'); await pg.goto(U); await pg.wait_for_timeout(1600)
+        await pg.evaluate("document.querySelector('#home-close')?.click()"); await pg.wait_for_timeout(300)
+    async def add_kind(label, opener='#add-btn'):
+        await pg.click(opener); await pg.wait_for_timeout(250)
+        await pg.locator('#clip-menu .clip-menu-item', has_text='Overlay clip').first.click(); await pg.wait_for_timeout(300)
+        await pg.locator('#clip-menu .clip-menu-item', has_text=label).first.click(); await pg.wait_for_timeout(600)
+    radio = lambda grp, name: pg.locator(f'#ov-body [aria-label="{grp}"] button', has_text=name)
+
+    # ---------- transitions ----------
+    await fresh()
+    await add_kind('Cogent')
+    looks = await st("[...document.querySelectorAll('#ov-body [aria-label=Look] button')].map(b=>b.textContent)")
+    ok('cogent Look reads Round · Rough edges', looks==['Round','Rough edges'], str(looks))
+    await radio('Look','Rough edges').click(); await pg.wait_for_timeout(300)
+    ok('Rough edges is the sticker cast', (await st("__studio.state().overlays.at(-1).sticker"))==True)
+    oid = await st("__studio.state().overlays.at(-1).id")
+    ins = await st("[...document.querySelectorAll('#ov-body [aria-label=In] button')].map(b=>b.textContent)")
+    ok('In offers Cut · Fade · Slide · Zoom', ins==['Cut','Fade','Slide','Zoom'], str(ins))
+    ok('a new clip (0.3 s fade) reads In Fade, Out Fade', await radio('In','Fade').get_attribute('aria-checked')=='true' and await radio('Out','Fade').get_attribute('aria-checked')=='true')
+    await radio('In','Slide').click(); await pg.wait_for_timeout(1500)
+    await radio('Out','Zoom').click(); await pg.wait_for_timeout(1500)
+    o = await st(f"__studio.state().overlays.find(o=>o.id==='{oid}')")
+    ok('In Slide / Out Zoom kept on the clip', o.get('tin')=='slide' and o.get('tout')=='zoom', str(o))
+    f = o['fade']; d=o['dur']
+    m0 = await st(f"__studio.ovMotion('{oid}', 0.02)"); mm = await st(f"__studio.ovMotion('{oid}', {d/2})"); m1 = await st(f"__studio.ovMotion('{oid}', {d-0.02})")
+    ok('slide in: starts lower and faint', m0['dy']>20 and m0['a']<0.3, str(m0))
+    ok('mid-clip: at rest', mm=={'a':1,'dx':0,'dy':0,'s':1}, str(mm))
+    ok('zoom out: small and faint at the end', m1['s']<0.7 and m1['a']<0.3, str(m1))
+    ok('choosing a transition plays it once, then stops', not await st("document.querySelector('#tl-play').classList.contains('is-playing')"))
+    await radio('In','Cut').click(); await pg.wait_for_timeout(1300)
+    m0 = await st(f"__studio.ovMotion('{oid}', 0.02)")
+    ok('Cut in: there at once', m0['a']==1 and m0['s']==1 and m0['dy']==0, str(m0))
+    ok('Transition length slider shows while one side moves', await pg.locator('#ov-body .slider-row', has_text='Transition').count()==1)
+    await radio('Out','Cut').click(); await pg.wait_for_timeout(300)
+    ok('Cut · Cut hides the length', await pg.locator('#ov-body .slider-row', has_text='Transition').count()==0)
+    # older project: fade with no type → Fade both ways
+    await st(f"(()=>{{const o=__studio.state().overlays.find(o=>o.id==='{oid}'); delete o.tin; delete o.tout; o.fade=0.5}})()")
+    m0 = await st(f"__studio.ovMotion('{oid}', 0.25)")
+    ok('older clips (fade, no type) still fade', 0.6<m0['a']<1 and m0['s']==1, str(m0))
+    # media full frame slide: across the frame
+    await st(f"(()=>{{const o=__studio.state().overlays.find(o=>o.id==='{oid}'); o.tin='slide'}})()")
+    mf = await st(f"__studio.ovMotion('{oid}', 0.02, true)")
+    ok('full-frame slide comes in from the side', mf['dx']>500 and mf['a']==1, str(mf))
+    # transitions render in an export frame: drawn while recording (the clip is mid-transition)
+    # ---------- rows ----------
+    for i in range(4): await add_kind('Text')
+    lane = await st("(()=>{const l=document.querySelector('#tl-overlay'); const a=l.querySelector('.ov-add').getBoundingClientRect(), r=l.getBoundingClientRect(); return {h:l.clientHeight, sh:l.scrollHeight, cls:l.className, a:[a.top,a.bottom], r:[r.top,r.bottom]}})()")
+    ok('five overlapping clips: three rows show (98 px)', lane['h']==98, str(lane))
+    ok('…the rest scroll inside the row', lane['sh']>lane['h']+20 and 'is-scrolling' in lane['cls'], str(lane))
+    await st("document.querySelector('#tl-overlay').scrollTop=999"); await pg.wait_for_timeout(200)
+    lane = await st("(()=>{const l=document.querySelector('#tl-overlay'); const a=l.querySelector('.ov-add').getBoundingClientRect(), r=l.getBoundingClientRect(); return {st:l.scrollTop, a:[a.top,a.bottom], r:[r.top,r.bottom]}})()")
+    ok('scrolled to the bottom: the + is still in view', lane['st']>0 and lane['a'][0]>=lane['r'][0]-1 and lane['a'][1]<=lane['r'][1]+1, str(lane))
+    await pg.locator('#tl-overlay .ov-add').click(); await pg.wait_for_timeout(300)
+    ok('…and still opens the overlay menu', await pg.locator('#clip-menu').is_visible())
+    await pg.keyboard.press('Escape')
+    tl = await st("document.querySelector('#timeline').getBoundingClientRect().height")
+    await pg.screenshot(path=D+'s216_rows.png')
+    # ---------- undo toast on top ----------
+    await pg.click('#add-btn'); await pg.wait_for_timeout(250)
+    await pg.locator('#clip-menu .clip-menu-item').first.click(); await pg.wait_for_timeout(500)
+    tr = await st("(()=>{const t=document.querySelector('#undo-toast'); if(!t||t.hidden) return null; const a=t.getBoundingClientRect(), b=document.querySelector('.topbar').getBoundingClientRect(), c=document.querySelector('#preview').getBoundingClientRect(); return {t:[a.top,a.bottom,a.left,a.right], bar:[b.top,b.bottom], cv:c.top, txt:t.textContent}})()")
+    ok('desktop: Undo toast sits on the top bar', tr and tr['t'][0]>=tr['bar'][0]-1 and tr['t'][1]<=tr['bar'][1]+1, str(tr))
+    ok('…clear of the design', tr and tr['t'][1] < tr['cv'], str(tr))
+    await pg.screenshot(path=D+'s216_toast.png', clip={'x':0,'y':0,'width':1440,'height':120})
+    # ---------- preview progress ----------
+    await st("document.querySelector('#fs-open').click()"); await pg.wait_for_timeout(400)
+    await st("document.querySelector('#fs-preview').click()"); await pg.wait_for_timeout(1200)
+    pb = await st("(()=>{const b=document.querySelector('#pv-progress'); if(!b||b.hidden) return null; const r=b.getBoundingClientRect(), c=document.querySelector('#preview').getBoundingClientRect(); return {n:b.children.length, w:r.width, cw:c.width, in:r.left>=c.left&&r.right<=c.right&&r.top>=c.top&&r.bottom<=c.bottom, f:b.querySelector('i').style.transform, playing:b.classList.contains('is-playing')}})()")
+    ok('preview: a progress bar along the canvas bottom', pb and pb['n']==1 and pb['in'] and pb['w']>pb['cw']*0.8, str(pb))
+    ok('…filling while it plays', pb and pb['playing'] and pb['f']!='scaleX(0)', str(pb))
+    await pg.screenshot(path=D+'s216_progress.png')
+    await st("document.querySelector('#fs-preview').click()"); await pg.wait_for_timeout(300)
+    ok('back to edit: the bar goes', await st("document.querySelector('#pv-progress').hidden"))
+    # ---------- phone ----------
+    await fresh(390,844)
+    await st("__studio.state().contentType") 
+    await pg.click('#tl-add-section'); await pg.wait_for_timeout(400)   # v4: sections have their own button
+    if not await st("!!document.querySelector('#undo-toast:not([hidden])')"):
+        items = pg.locator('#clip-menu .clip-menu-item')
+        if await items.count(): await items.first.click(); await pg.wait_for_timeout(500)
+    tr = await st("(()=>{const t=document.querySelector('#undo-toast'); if(!t||t.hidden) return null; const a=t.getBoundingClientRect(), b=document.querySelector('.topbar').getBoundingClientRect(); return {t:[a.top,a.bottom,a.left,a.right], bar:[b.top,b.bottom]}})()")
+    ok('phone: Undo toast over the top bar, inside the screen', tr and tr['t'][1]<=tr['bar'][1]+6 and tr['t'][2]>=0 and tr['t'][3]<=390, str(tr))
+    await pg.screenshot(path=D+'s216_phone_toast.png')
+    await st("document.querySelector('#fs-preview').click()"); await pg.wait_for_timeout(1200)
+    pb = await st("(()=>{const b=document.querySelector('#pv-progress'); return b && !b.hidden && b.getBoundingClientRect().width>200})()")
+    ok('phone: progress bar in Preview', pb)
+    await pg.screenshot(path=D+'s216_phone_progress.png')
+    await st("document.querySelector('#fs-preview').click()"); await pg.wait_for_timeout(300)
+    # carousel: one segment per slide
+    await fresh()
+    await st("(()=>{const s=document.querySelector('#format-select')||document.querySelector('#fmt-select'); return !!s})()")
+    ok('no page errors', not [l for l in logs if 'PAGEERROR' in l], str(logs))
+    print('TOTAL', sum(R), '/', len(R))

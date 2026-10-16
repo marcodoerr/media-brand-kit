@@ -32,9 +32,9 @@
 
 <header class="topbar">
   <div class="brand">
-    <!-- the menu: your projects (recent, saved, new) and, on a phone, the view settings -->
-    <button class="burger" id="burger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="burger-menu" aria-label="Menu — projects and view" title="Projects">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    <!-- v4 · the Projects menu: new, templates, recent, all projects. View settings have their own button. -->
+    <button class="burger" id="burger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="burger-menu" aria-label="Projects and templates" title="Projects and templates">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span class="burger-label">Projects</span>
     </button>
     <!-- v3.1: the whole brand area — mark, label, name, caret — opens the brand switcher
          (an invisible native select over it: keyboard, touch and the system list for free) -->
@@ -46,18 +46,31 @@
       </span>
       <select id="brand-select" class="brand-select tab-select" aria-label="Brand — switch to another brand"></select>
     </span>
-    <!-- the project's format: a setting made once, so it sits with the brand, not with the section buttons -->
-    <span class="brand-switch topbar-format">
-      <span class="brand-kicker" aria-hidden="true">Format</span>
-      <span class="format-pill" aria-hidden="true"><span id="tb-format-label">Video · 9:16</span></span>
-      <select id="tab-format-select" class="tab-select" aria-label="Format"></select>
+    <!-- v4 · what you are making, then its size: two separate choices, both switchable at any time -->
+    <div class="tb-content" role="radiogroup" aria-label="Content type">
+      <button type="button" role="radio" class="tb-content-btn" data-type="video" aria-checked="true" title="Reel: a video, with sections on a timeline">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5 21 8v8l-5-2.5z"/></svg><span>Reel</span></button>
+      <button type="button" role="radio" class="tb-content-btn" data-type="carousel" aria-checked="false" title="Carousel: one image per slide">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="11" height="14" rx="2"/><path d="M3 8v8M21 8v8"/></svg><span>Carousel</span></button>
+    </div>
+    <span class="brand-switch topbar-format" title="Size">
+      <span class="brand-kicker" aria-hidden="true">Size</span>
+      <span class="format-pill" aria-hidden="true"><span id="tb-format-label">Vertical · 9:16</span></span>
+      <select id="tab-format-select" class="tab-select" aria-label="Size"></select>
     </span>
+  </div>
+  <!-- v4 · the open project's name and whether it is really saved -->
+  <div class="proj-status" id="proj-status" aria-live="polite">
+    <span class="ps-name" id="ps-name">Untitled</span>
+    <span class="ps-state" id="ps-state" data-s="idle"><i class="ps-dot" aria-hidden="true"></i><span id="ps-text">Not saved yet</span></span>
   </div>
   <div class="topbar-actions">
     <!-- v3.21 · a new project in the brand that is open (desktop; a phone has it under +) -->
     <button class="save-heart new-proj" id="btn-new-proj" type="button" aria-label="New project" title="New project in this brand"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13.5 3.5V9H19"/><path d="M12 12v6M9 15h6"/></svg></button>
-    <!-- v3.2 · save the open project under a name -->
-    <button class="save-heart" id="btn-save-proj" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="save-pop" aria-label="Save project" title="Save project"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.2s-7.6-4.6-7.6-10.1A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.6 2.7c0 5.5-7.6 10.1-7.6 10.1z"/></svg></button>
+    <!-- v4 · Save a named copy (was a heart). The open design itself saves automatically: see the status. -->
+    <button class="save-heart save-copy" id="btn-save-proj" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="save-pop" aria-label="Save a named copy" title="Save a named copy (the open design saves automatically)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11l3.5 3.5v11a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V6A1.5 1.5 0 0 1 6 4.5z"/><path d="M8 4.5v5h7v-5M8 20.5v-6h8v6"/></svg><span class="btn-label">Save copy</span></button>
+    <!-- v4 · Preview (was Present): the design full screen, exactly as it exports (videos play, carousels swipe) -->
+    <button class="save-heart present-btn" id="btn-present" type="button" aria-label="Preview" title="Preview: full screen, exactly as it exports"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="btn-label">Preview</span></button>
     <button class="btn btn-primary" id="btn-export" type="button" aria-label="Export" title="Export"><svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 13.5V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4.5"/></svg><span class="btn-label">Export</span></button>
   </div>
 </header>
@@ -100,6 +113,11 @@
               aria-label="Full-screen edit" title="Full-screen edit">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <!-- v4 · canvas settings (safe area, grid) apart from project navigation -->
+      <button class="surface-toggle view-btn" id="view-btn" type="button" aria-haspopup="menu"
+              aria-label="View: safe area and grid" title="View: safe area and grid">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4 12h16M12 4v16" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".6"/></svg>
+      </button>
       <!-- what the preview sits on: the dark studio or a white screen — a
            viewing aid only, never exported -->
       <button class="surface-toggle" id="surface-toggle" type="button" aria-pressed="false"
@@ -111,7 +129,7 @@
           <button class="fs-btn" id="fs-prev" type="button" aria-label="Previous section"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>
           <span class="fs-scope edit-scope" id="fs-scope"><i class="cat-dot" aria-hidden="true"></i><span class="fs-scope-name" id="fs-scope-name">Hook</span><span class="fs-count" id="fs-count"></span></span>
           <button class="fs-btn" id="fs-next" type="button" aria-label="Next section"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg></button>
-          <button class="fs-btn fs-pill fs-add-section" id="fs-add-section" type="button" aria-haspopup="menu" aria-label="Add" title="Add text, a button, media, a badge, a section — or change the background"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span></button>
+          <button class="fs-btn fs-pill fs-add-section" id="fs-add-section" type="button" aria-haspopup="menu" aria-label="Add element" title="Add an element: text, a button, media, a badge, a drawing — or change the background"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span></button>
         </div>
         <p class="fs-hint" id="fs-hint">Tap an item to edit it · + to add</p>
         <div class="fs-actions">
@@ -120,9 +138,9 @@
             <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
           </button>
           <!-- desktop: the view settings (safe area, grid) with the full-screen control -->
-          <button class="fs-btn fs-desk" id="fs-view" type="button" aria-haspopup="menu" aria-label="View: safe area, grid, full screen" title="View">
+          <button class="fs-btn" id="fs-view" type="button" aria-haspopup="menu" aria-label="View: safe area and grid" title="View: safe area and grid">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 12h16M12 4v16" opacity=".55"/></svg></button>
-          <button class="fs-btn fs-pill" id="fs-preview" type="button" aria-pressed="false">
+          <button class="fs-btn fs-pill" id="fs-preview" type="button" aria-pressed="false" aria-label="Preview" title="Preview: exactly as it exports">
             <svg class="i-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg class="i-edit" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19l1-4L15.5 5.5a2 2 0 0 1 3 3L9 18l-4 1z"/></svg>
             <span id="fs-preview-label">Preview</span>
@@ -149,6 +167,9 @@
           </button>
           <span class="tl-time" id="tl-time">0:00.0 / 0:09.0</span>
           <span class="tl-spacer"></span>
+          <!-- v4 · a new section (Reel) or slide (Carousel), apart from adding an element -->
+          <button class="tl-add-section" id="tl-add-section" type="button" aria-haspopup="menu" title="Add a section after the one you are on">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="11" height="14" rx="2"/><path d="M19 9v6M16 12h6"/></svg><span id="tl-add-label">Add section</span></button>
           <!-- extensions only: a phone then opens its files, not the camera / photo sheet -->
           <input type="file" id="music-input" accept=".mp3,.m4a,.aac,.wav,.ogg,.oga,.flac,.opus" hidden>
           <input type="file" id="music-video-input" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" hidden>
@@ -179,7 +200,7 @@
     <!-- + adds something new; selecting on the preview edits it (the tabs are gone) -->
     <div class="panel-top" id="panel-top">
       <button class="add-btn" id="add-btn" type="button" aria-haspopup="menu">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add element</span>
       </button>
       <span class="panel-top-title" id="panel-top-title"></span>
       <button class="panel-done" id="panel-done" type="button" hidden>Done</button>
@@ -783,6 +804,23 @@
     <div class="group" id="group-view" data-tabs="all">
       <p class="neutral-hint" id="neutral-hint"><b>Tap anything to edit it.</b>
         <span class="neutral-plus">+ Add</span> puts something new on this section.</p>
+      <!-- v4 · nothing selected: what to do, and the shortcuts -->
+      <div class="v4-hint" id="v4-hint">
+        <p class="v4-hint-lead"><b>Nothing selected.</b> Click anything on the canvas to edit it, or drag it to move it.</p>
+        <div class="v4-hint-acts">
+          <button type="button" class="v4-chip" data-v4="add">Add element</button>
+          <button type="button" class="v4-chip" data-v4="section">Add section</button>
+          <button type="button" class="v4-chip" data-v4="background">Background</button>
+        </div>
+        <dl class="v4-keys">
+          <div><dt><kbd>⌘</kbd><kbd>Z</kbd></dt><dd>Undo</dd></div>
+          <div><dt><kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd></dt><dd>Redo</dd></div>
+          <div><dt><kbd>Delete</kbd></dt><dd>Remove the selected item</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd>Done / close</dd></div>
+          <div><dt><kbd>⇧</kbd> click</dt><dd>Select several</dd></div>
+          <div><dt><kbd>⌘</kbd><kbd>S</kbd></dt><dd>Save now</dd></div>
+        </dl>
+      </div>
       <div class="toggles toggles-tight view-toggles">
         <label class="switch">
           <input type="checkbox" id="tg-guides">
@@ -902,7 +940,7 @@
 
     <!-- v3.1: Create new first — one tap per brand opens a Reel (the format is changed in the editor) -->
     <section class="home-sec home-create">
-      <div class="home-head"><h2 id="home-create-title">Create new</h2></div>
+      <div class="home-head"><h2 id="home-create-title">Choose your brand</h2><p class="home-sub" id="home-create-sub"></p></div>
       <div class="home-brands" id="home-create-list"></div>
     </section>
 
@@ -976,15 +1014,35 @@
       <p class="sheet-facts"><span class="type-chip" id="sheet-type">Video</span> <span id="sheet-facts"></span></p>
     </div>
 
+    <!-- v4 · what to export: the whole project, sections you pick, the one you are on, or selected elements -->
+    <div class="sheet-scope" id="sheet-scope-row">
+      <span class="lbl lbl-sub">What to export</span>
+      <div class="segments seg-scope" id="seg-scope" role="radiogroup" aria-label="What to export">
+        <button type="button" role="radio" data-scope="all" aria-checked="true">Entire project<small id="scope-all-sub">Every section</small></button>
+        <button type="button" role="radio" data-scope="pick" aria-checked="false">Choose<small id="scope-pick-sub">Tap to include</small></button>
+        <button type="button" role="radio" data-scope="current" aria-checked="false">This one<small id="scope-cur-sub">Hook</small></button>
+        <button type="button" role="radio" data-scope="elements" aria-checked="false">Elements<small id="scope-el-sub">Selected items</small></button>
+      </div>
+    </div>
     <!-- step 2: only what the chosen file needs -->
     <div class="sheet-options" id="sheet-options">
       <div id="sheet-filetype-row">
         <span class="lbl lbl-sub">File type</span>
-        <div class="segments seg-size" id="seg-filetype" role="radiogroup" aria-label="File type">
+        <div class="segments seg-size seg-filetype" id="seg-filetype" role="radiogroup" aria-label="File type">
+          <button type="button" role="radio" data-kind="video" aria-checked="false">Video<small id="kind-video-sub">MP4</small></button>
           <button type="button" role="radio" data-kind="png" aria-checked="true">PNG<small>Sharpest</small></button>
           <button type="button" role="radio" data-kind="jpg" aria-checked="false">JPG<small>Smaller files</small></button>
+          <button type="button" role="radio" data-kind="pdf" aria-checked="false">PDF<small>One page each</small></button>
+          <button type="button" role="radio" data-kind="pptx" aria-checked="false" hidden>PowerPoint<small>Editable text</small></button>
         </div>
       </div>
+      <label class="switch" id="sheet-zip-row" hidden>
+        <input type="checkbox" id="sheet-zip" checked>
+        <span class="track" aria-hidden="true"></span>
+        <span>Package as one .zip <small class="switch-sub">numbered in order; off = separate downloads</small></span>
+      </label>
+      <p class="micro" id="pptx-hint" hidden>An editable PowerPoint (.pptx): headers, body text, text cards and buttons stay editable. The background, logos, pictures, drawings and Luxury buttons are placed as pictures. Fonts are named, not embedded — install the brand fonts for an exact match.</p>
+      <p class="micro" id="pdf-hint" hidden>A PDF for sharing or printing: one page per slide, each page a picture of it. Showing it full screen is the Preview button, not this file.</p>
       <span class="lbl lbl-sub">Size</span>
       <div class="segments seg-size" id="seg-size" role="radiogroup" aria-label="Size">
         <button type="button" role="radio" data-scale="1" aria-checked="true">Standard<small id="size-1">1080 × 1920</small></button>
@@ -1003,6 +1061,7 @@
           <span>Also save a cover image <small class="switch-sub" id="sheet-cover-sub">the Hook, as JPG</small></span>
         </label>
         <p class="micro" id="video-hint">Records in real time.</p>
+        <p class="micro server-note" id="server-render-note" hidden></p>
       </div>
       <p class="micro scenes-note" id="scenes-note" hidden></p>
 
@@ -1010,16 +1069,26 @@
     </div>
     <!-- each item of a section — background, text, buttons, media, badge — as its own PNG -->
     <details class="sheet-items" id="sheet-items">
-      <summary><span>Items as separate PNGs</span><small>Transparent · for other tools</small></summary>
+      <summary><span>Elements as separate PNGs</span><small>Transparent · for other tools</small></summary>
       <div class="segments items-scenes" id="items-scenes" role="radiogroup" aria-label="Section"></div>
       <div class="items-list" id="items-list"></div>
       <label class="switch">
         <input type="checkbox" id="items-full">
         <span class="track" aria-hidden="true"></span>
-        <span>Full frame <small class="switch-sub">Each item where it sits, at the full size — for layering</small></span>
+        <span>Keep each element in its original position <small class="switch-sub">Full-size transparent files that line up when layered</small></span>
       </label>
       <button class="btn btn-outline btn-block" id="items-all" type="button">Save all items as .zip</button>
     </details>
+    <div class="sheet-sel" id="sheet-sel" hidden>
+      <p class="micro" id="sel-sum"></p>
+      <div class="items-list" id="sel-list"></div>
+      <label class="switch">
+        <input type="checkbox" id="sel-full">
+        <span class="track" aria-hidden="true"></span>
+        <span>Keep each element in its original position <small class="switch-sub">Full-size transparent files that line up when layered</small></span>
+      </label>
+      <button class="btn btn-primary btn-block" id="sel-go" type="button">Download</button>
+    </div>
     <p class="upload-error" id="export-note" hidden></p>
   </div>
 </div>

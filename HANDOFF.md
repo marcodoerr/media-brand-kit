@@ -1,7 +1,7 @@
 # Media Brand Kit (formerly Backdrop Studio): version handoff
 
-**Version:** v3.25, 2026-10-10 (on top of v3.24). Latest changes: §48, §47, §46, §45, §44, §43, §42, §41, §40, §39, §38, §37, §36, §35, §34; v3.1 changes: §21; the spec audit: §22.
-**Files:** `media-brand-kit.zip` (static site, deploys to Netlify as-is)
+**Version:** v4.0, 2026-10-13 (on top of v3.25; see §49). Earlier: §48, §47, §46, §45, §44, §43, §42, §41, §40, §39, §38, §37, §36, §35, §34; v3.1 changes: §21; the spec audit: §22.
+**Files:** GitHub `marcodoerr/media-brand-kit` (branch `feature/v4-navigation-adapt-export`, PR #1; `main` = v3.25 as live). Static site, deploys to Netlify as-is. Rollback: `ROLLBACK.md`. Backend design: `BACKEND.md`.
 **Figma:** file `0amKYViLpkdmw2ZL93G7FN`, section *"Backdrop Studio v2 — from code (desktop + mobile)"*
 **Brands:** Ask Ruth.AI · MoshPit · T4R Labs
 **Owner:** Marco Doerr
@@ -167,7 +167,7 @@ HANDOFF.md        this file
 1. **Export and save logic must not be overwritten.** These 39 functions in `js/app.js` must stay byte-identical to the original:
    `exportImage exportVideo pickVideoMime primaryVideoId sourceDuration downloadBlob showExportNote exportSlug save loadTemplates writeTemplates snapshot thumbDataUrl saveTemplate deleteTemplate renderTemplates importFiles dropUpload redrawThumbWhenReady adjustFor syncAdjust bindAdjusts sizeCanvas hasMotion tick draw wireUploads wireInset syncInsetControls placeInsetClearOfText buildOverlaySegments bindText bindToggle trackTopbar overhang snap toCanvas revealThumb syncThumbs`
    The check (`protect.py`) compares them against `orig/js/app.js`. It passes 39/39 in this version.
-2. **`js/store.js` is unchanged**, except one approved line: `MAX_VIDEO_BYTES` raised from 120 MB to 200 MB.
+2. **`js/store.js` is unchanged**, except one approved line: `MAX_VIDEO_BYTES` (120 → 200 MB in v2, → **300 MB in v4**). protect.py allows exactly that line.
 3. **New behaviour is added around the protected code, never inside it.** It goes in new functions, capture listeners and new render entry points (`renderItem`, `itemsOf`, `badgeScaleMax`, `patternFill`).
 4. **After every change:** run the browser tests, run the protection check, update `README.md`, rezip (excluding `orig/`), and sync the Figma screens.
 5. **Keep `orig/` out of the shipped zip.** It's only the reference copy for the protection check.
@@ -1021,4 +1021,112 @@ File: figma.com/design/0amKYViLpkdmw2ZL93G7FN. Nothing was deleted.
   - Phone is unchanged.
 - **Tests:** the icon-contrast script now targets `#surface-toggle` by id (it took the first `.surface-toggle`) and is still ≥ 3:1 everywhere. `s216` and `s217` pass; `s191` has only its known FAIL.
 - **Figma:** a note sits in the *v3.20 – v3.21 · additions* frame.
+
+
+## 49. v4.0 (2026-10-13): navigation, Adapt layout, export scopes, video import
+
+Built from Marco's v4 brief, on top of v3.25.
+- **Preserved first:**
+  - git tag `baseline/v3.25-2026-10-13` (local only), and branch `backup/v3.25-2026-10-13` on GitHub
+  - the Figma original page renamed *…v3.25 ORIGINAL (frozen 2026-10-13)*, with all work on the duplicate *…v4 (working, from v3.25)*
+  - the Netlify deploy id in `ROLLBACK.md`
+- **Rules held:** the 39 protected functions are byte-identical (protect.py 39/39). The only change to store.js is the 300 MB line.
+
+**New modules (`js/v4/`):**
+| File | What |
+|---|---|
+| `media.js` | Limits (`LIMITS`), `kindOf` / `withType` (typeless .mov / .mkv), `precheck`, `inspectVideo` (metadata, then one seeked frame and a thumbnail, with timeouts; all resources released), `storedSizes` (read-only IndexedDB), `idsInDesign` (exact references, not `adjust`). |
+| `importer.js` | `installImportGuard`: a capture `change` on document plus a capture `drop` on window; checks the file, then hands it back to the protected input handler (`input.__v4pass`); a status tray; a journal (`…v4.importing` / `…v4.before-import`) for recovery. `installDecoderBudget`: pauses clips the open design doesn't use. `reportUnplayable`. `notice()`. |
+| `guard.js` | `watchPersistence` (wraps `Storage.prototype.setItem` for STORAGE_KEY only, so the save status is true), `installFaultGuard` (own-code errors only → banner; canvas `contextlost`). |
+| `adapt.js` | The pure planner: `unitsOf` / `joinUnits` (lossless), `chainsOf`, `plan(scenes, measure)`. |
+| `pdf.js` | A JPEG-page PDF writer (`pdfOf`). |
+| `model.js` | `describe(state)` (stable ids `section/key`, locked, generated, group) and `scopedChange` (one Undo, refuses locked targets), for a future design agent. |
+| `backend.js` | The client for the not-yet-provisioned backend. `BACKEND` is null unless `<meta name="mbk-backend">` is set, and every call throws `BackendUnavailable`. |
+
+**In app.js (v4 blocks at the end, plus small edits outside protected code):**
+- `uploadsLoaded` / `pendingUpload()` and the guarded startup `commitScene`: the reload data-loss fix.
+- `wireV4`, `wireV4Nav`: Present, the View button, hover (`hoverHit`), Add section, the hint, the save status and ⌘S.
+- `syncFormatTab` (Size), `syncContentTabs`, `switchContent`, `SIZE_NAMES`.
+- `renderBurger` (Projects only).
+- `addItems`: no Section, except in desktop full screen.
+- Locks: `sc.locks`, `sc.locked`, `isLocked`, `setLocked`, `lockedSnapshot` / `restoreLocked`; `tidySection` and `fitLayout` are wrappers around `…Raw`; drag is blocked through a capture pointermove; `itemMenuFor` is extended.
+- Adapt: `contFrom`, `adaptMeasure` (sandboxed `layout()` per size), `planAdapt`, `fitSectionAt`, `applyAdapt`, `openAdapt`, `wireV4Adapt`.
+- Export:
+  - `exportPick` filters `enabledScenes()` while the sheet is open.
+  - Scopes, the PDF, the .zip and Elements live in the sheet code.
+  - `slides(type, scale, collect)` can collect files instead of downloading them.
+  - `exportScenesVideo` maps `seqClock` to the film's time for subsets.
+  - `selectedElementIds` / `selAtExport` remember the selection as Export is pressed.
+
+**render.js:**
+- `paintBackdrop` is in a try/catch; on failure it fills the base colour and calls `renderHooks.fault`.
+- `opts.dragNow` and `opts.hoverRect` added.
+- The selection stays visible while hovering.
+
+**Diagnosis of "the app went blank on video import"** (reproduced in Chromium; the coworker's file wasn't available):
+1. HEVC/ProRes/10-bit clips: sound played but there was no picture (videoWidth 0). They were accepted silently, the background was empty, and it stayed empty after a reload.
+2. Every stored clip decoded and played at once, including clips from other designs. This is GPU/decoder pressure, so the canvas can go blank.
+3. No time-out or feedback.
+4. Separately, a real data-loss bug on reload (above).
+
+Size alone wasn't the cause: three 185 MB clips imported fine.
+
+**Tests (dev kit):**
+| Script | Result | Covers |
+|---|---|---|
+| `s222` | 46/46 | import: codecs, sound-only, garbage, 5K, 461 MB, 3×185 MB sections, pause budget, Media / More media / typeless / drop, Cancel, journal |
+| `s223` | 10/10 | reload keeps section videos (fails 6 checks on v3.25) |
+| `s224` | 24/24 | Adapt: split / gather lossless, Undo, Hook/CTA untouched, locks, resize-safe, reload |
+| `s225` | 31/31 | Export: scopes, video subset, This one, Carousel .zip / separate, PDF (pdfinfo, qpdf, render), Elements cut / in position, items .zip, phone |
+
+Regression:
+- `s208`–`s210` and `s213` pass, as do `s216` (patched: Add section button), `s217` (patched: Projects lists New project), `s220` and `s221`.
+- `s212` passes 41/42. Its "frames differ" check is flaky in headless recording, and passed on reruns.
+- `s191` passes 84 and has its known FAIL plus the same time-out as v3.25.
+- Pre-v4 copies of the patched scripts are in `tests/pre_v4/`.
+
+**Figma:**
+- Components › *v4 · additions (2026-10-13)*: Content toggle, Size dropdown, Save status (Saved / Saving / Not saved), Top action (Projects / Save copy / Present), Add section (Section / Slide), Brand card (3 brands), Neutral hint v4, Import item (Processing / Saving / Added / Error / Timeout / Notice), Export scope (4), File type (Reel / Carousel), Adapt layout dialog, Canvas states (Hover / Selected / Locked).
+- Working page, row at y 38880: Desktop · Editor (nothing selected), Start · Choose your brand, Video import, Export (Entire / Elements), Adapt layout preview, Hover and selected; Mobile · Editor, Video import, Export.
+- Existing components were not edited.
+
+**Open / next:**
+- Backend (BACKEND.md §6): nothing provisioned.
+- A deterministic frame-stepped render is phase 2.
+- Group drag for `item.group` (the data model is ready; there's no UI to group yet).
+- The 3:4 / 4:5 / 1:1 Adapt rules use the 6 % safe margin.
+- Safari / Firefox / iOS are not tested here: only Chromium was available.
+- The multi-select right after closing a clip menu with Esc didn't register in one test (it also happens on v3.25).
+- PPTX is not offered.
+
+## 50. Releases (Marco, 2026-10-13)
+
+- **Release 1 = v4.0 (this branch, PR #1).** This release covers making the existing editor reliable and polished, including video reliability and the Release 1 backend work. It adds no AI services, Design Cogents, Smart Templates or AI dependencies. `js/v4/model.js` is plain data (stable ids, locks, scoped Undo), and nothing calls a model.
+- **To publish:** a verified Netlify Deploy Preview, then Marco's explicit approval, then the merge to `main`. The rollback point is in ROLLBACK.md.
+- **Video status for Release 1:** works in the browser within the stated limits (300 MB per clip, 4096 px, 10 min, 1.2 GB per design), tested in Chromium only. There is no backend yet (BACKEND.md), so there is no shared media and no server render. Don't call video editing production-ready on Safari or iPhone until it is checked on those devices.
+- **Coordination:** the developer's own video-crash and backend work goes through GitHub too. Branch from `feature/v4-navigation-adapt-export`, or review PR #1 first; §49 lists every file it touches.
+- **Release 2 (Smart Templates, Design Cogent, AI analysis)** starts only after Release 1 is approved:
+  - a new branch from the approved production commit
+  - its own Deploy Preview
+  - features behind flags
+  - an audit of brand assets and agent infrastructure, and a check of AI API access and costs, before any integration
+
+## 51. Before going live (2026-10-15)
+
+Checked on PR #2 (f96f7ad, the preview link Marco approved). The full suite `s208`–`s238` plus protect.py ran. Fixed before merging to `main`:
+
+- **Bug: overlay panel edits lost after Undo.**
+  - Steps: move a clip, Undo, then change it in the panel (for example Full frame → Window). The change went nowhere: Undo puts a fresh copy of the clip in the state, and the panel kept writing to the copy it was built from.
+  - `renderOverlayGroup()` now reads and writes the clip through its id (a Proxy over `overlayById(oid)`).
+  - Found by `s210`, which now passes 22/22.
+- **Phones under 430 px.** At 390 / 375 / 360 px:
+  - the top bar's "9:16" ran under the Appearance button
+  - the second row pushed Light / dark off the right edge
+  - Fix, at ≤ 400 px: the brand shows as its mark (the mark still opens the brand list), and the second row's round buttons are 36 px with 4 px gaps.
+  - Fix, at ≤ 370 px: 34 px buttons, and the section count (1 / 3) is hidden.
+  - Nothing is off-screen at 430 / 390 / 375 / 360.
+- **Tests.**
+  - `s208` now checks the current phone order (+ · Undo · Redo · Preview · Light / dark) and that nothing is off-screen.
+  - `tests/photo.png` (s231's picture) is committed; it had been ignored by `*.png`.
+  - Results: every test passes except `s213`'s phone tap, which flaked once and then passed 30/30 twice.
 

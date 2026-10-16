@@ -118,6 +118,12 @@ const fonts = (S, h1Scale, bodyScale) => {
   return { h1: style('h1', h1Scale), body: style('body', bodyScale) };
 };
 
+/** The active brand's base header / body sizes (px at a 1080 unit), before scale. */
+export const baseTypeSizes = () => {
+  const own = (activeBrand() && activeBrand().type) || {};
+  return { h1: (own.h1 && own.h1.size) || BASE_TYPE.h1.size, body: (own.body && own.body.size) || BASE_TYPE.body.size };
+};
+
 /* Header and Body scale independently. Designs saved before that had one
    shared `scale`, so either one falls back to it and old templates render
    exactly as they did. */
@@ -614,6 +620,58 @@ function drawCta(ctx, L, colors) {
   ctx.restore();
 }
 
+/* v4.1 · Luxury buttons — brand colours only (gradients between a brand's own colours), one
+   version for light grounds and one for dark, every label ≥ 6 : 1 on every gradient stop.
+   A fine ring 4 px outside, a soft tinted shadow (never black), a top highlight and an arrow chip. */
+export const LUX = {
+  askruth: { font: 'Bitter, Georgia, serif', weight: 700, upper: false, track: 0.01,
+    light: { top: '#8c008f', bottom: '#4a0649', ink: '#ffdafe', ring: '#4a0649', ringA: 0.35, shadow: '#4a0649', shadowA: 0.35, hi: 0.22, chip: '#ff8eff', arrow: '#4a0649' },
+    dark: { top: '#ffdafe', bottom: '#ff8eff', ink: '#4a0649', ring: '#ff8eff', ringA: 0.5, shadow: '#ff8eff', shadowA: 0.35, hi: 0.6, chip: '#4a0649', arrow: '#ff8eff' } },
+  moshpit: { font: "Roboto, 'Arial Black', system-ui, sans-serif", weight: 900, upper: true, track: 0.08,
+    light: { top: '#262624', bottom: '#1a1915', ink: '#0bb8d9', ring: '#1a1915', ringA: 0.4, shadow: '#1a1915', shadowA: 0.4, hi: 0.12, chip: '#0bb8d9', arrow: '#1a1915' },
+    dark: { top: '#0bb8d9', bottom: '#09a6c4', ink: '#1a1915', ring: '#0bb8d9', ringA: 0.55, shadow: '#0bb8d9', shadowA: 0.3, hi: 0.45, chip: '#1a1915', arrow: '#0bb8d9' } },
+  t4r: { font: 'Poppins, system-ui, sans-serif', weight: 600, upper: false, track: 0.02,
+    light: { top: '#2d2d6b', bottom: '#0e253f', ink: '#ffffff', ring: '#0e253f', ringA: 0.3, shadow: '#0e253f', shadowA: 0.3, hi: 0.18, chip: '#03d5ff', arrow: '#0e253f' },
+    dark: { top: '#03d5ff', bottom: '#03d5ff', ink: '#0e253f', ring: '#03d5ff', ringA: 0.5, shadow: '#03d5ff', shadowA: 0.35, hi: 0.55, chip: '#0e253f', arrow: '#03d5ff' } },
+};
+const luxOf = () => LUX[(activeBrand() && activeBrand().id) || 'askruth'] || LUX.askruth;
+const rgba = (hex, a) => { const n = hex.replace('#', ''); return `rgba(${parseInt(n.slice(0, 2), 16)}, ${parseInt(n.slice(2, 4), 16)}, ${parseInt(n.slice(4, 6), 16)}, ${a})`; };
+const lumOf = (hex) => { const n = String(hex || '').replace('#', ''); if (n.length < 6) return 0; const c = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+/** Light or dark ground under a button: from the background's base colour. */
+const groundOf = (base) => (/^#[0-9a-f]{6}$/i.test(base || '') && lumOf(base) > 0.35 ? 'light' : 'dark');
+function paintLux(ctx, x, y, w, h, m, base) {
+  const L = luxOf(), P = L[groundOf(base)];
+  const S = m.S || 1;
+  const top = m.fill || P.top, bottom = m.fill || P.bottom, ink = m.ink || P.ink;
+  const r = h / 2 * (typeof m.radius === 'number' ? m.radius : 1);
+  ctx.save();
+  // ring, 4 px outside
+  const o = 4 * S * m.k;
+  roundRect(ctx, x - o, y - o, w + o * 2, h + o * 2, r ? r + o : 0);
+  ctx.lineWidth = Math.max(1, 1.4 * S); ctx.strokeStyle = rgba(P.ring, P.ringA); ctx.stroke();
+  // body with a soft tinted shadow
+  ctx.shadowColor = rgba(P.shadow, P.shadowA); ctx.shadowBlur = 26 * S * m.k; ctx.shadowOffsetY = 10 * S * m.k;
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, top); g.addColorStop(1, bottom);
+  roundRect(ctx, x, y, w, h, r); ctx.fillStyle = g; ctx.fill();
+  ctx.shadowColor = 'transparent';
+  // top highlight
+  ctx.save(); roundRect(ctx, x, y, w, h, r); ctx.clip();
+  ctx.fillStyle = `rgba(255, 255, 255, ${P.hi})`; ctx.fillRect(x, y, w, Math.max(1, 1.6 * S));
+  ctx.restore();
+  // label
+  ctx.font = m.css(m.fs); ctx.fillStyle = ink; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  if ('letterSpacing' in ctx) ctx.letterSpacing = `${(L.track * m.fs).toFixed(2)}px`;
+  ctx.fillText(m.text, x + m.padL, capCentre(ctx, y + h / 2, m.fs));
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  // arrow chip
+  const d = m.chip, cx = x + w - m.padR - d / 2, cy = y + h / 2;
+  ctx.beginPath(); ctx.arc(cx, cy, d / 2, 0, Math.PI * 2); ctx.fillStyle = P.chip; ctx.fill();
+  ctx.strokeStyle = P.arrow; ctx.lineWidth = Math.max(1.5, d * 0.1); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const a = d * 0.24;
+  ctx.beginPath(); ctx.moveTo(cx - a, cy); ctx.lineTo(cx + a, cy); ctx.moveTo(cx + a * 0.2, cy - a * 0.8); ctx.lineTo(cx + a, cy); ctx.lineTo(cx + a * 0.2, cy + a * 0.8); ctx.stroke();
+  ctx.restore();
+}
+
 /** One button: the brand's button type and colours unless the button has its own. */
 function measureButton(ctx, b, W, H, S, sa) {
   const text = String(b.text || '').trim();
@@ -632,6 +690,24 @@ function measureButton(ctx, b, W, H, S, sa) {
   if (bw > max) { fs = size * (max - padX * 2) / (bw - padX * 2); bw = max; }
   const bh = fs * 1.1 + padY * 2;
   const sw = Math.max(0, Number(lk.strokeW) || 0) * S;
+  if (lk.style === 'luxury') {
+    const L = luxOf();
+    const lt = L.upper ? text.toUpperCase() : text;
+    const lsize = size * (L.upper ? 0.86 : 1.02);
+    const lcss = (s2) => `${L.weight} ${s2}px ${L.font}`;
+    ctx.font = lcss(lsize);
+    const tw = ctx.measureText(lt).width * (1 + L.track);
+    const padL = 60 * S * k, padR = 14 * S * k, gap = 22 * S * k;
+    let lfs = lsize;
+    const chip0 = lsize * 1.9;
+    let lbw = padL + tw + gap + chip0 + padR;
+    if (lbw > max) { const kk = (max - padL - gap - padR - chip0) / tw; lfs = lsize * Math.max(0.5, kk); lbw = max; }
+    const chip = Math.min(chip0, lfs * 1.9);
+    const lbh = Math.max(lfs * 1.1 + padY * 1.6, chip + padR * 2);
+    return { lux: true, text: lt, fs: lfs, css: lcss, bw: lbw, bh: lbh, brand, padL, padR, chip, S, k,
+      fill: lk.fill || null, ink: lk.ink || null, stroke: null, sw: 0,
+      radius: typeof lk.radius === 'number' ? Math.max(0, Math.min(1, lk.radius)) : 1 };
+  }
   return {
     text: t, fs, css, bw, bh, brand,
     fill: lk.fill || null, ink: lk.ink || null, stroke: lk.stroke && sw ? lk.stroke : null, sw,
@@ -647,8 +723,10 @@ function capCentre(ctx, mid, fs) {
   return mid + cap / 2;
 }
 
-function drawButton(ctx, btn, base) {
-  const { m, rect } = btn;
+/** A standard button's colours and corner radius as drawn on `base` (shared by drawButton and
+    the PowerPoint export, so both use the same colours). Luxury buttons are painted, not filled. */
+export function buttonPaint(btn, base) {
+  const { m } = btn;
   let fill = m.fill || m.brand.bg, ink = m.ink || m.brand.ink;
   // the brand's own colours swap when the button would vanish into its background
   if (!m.fill && !m.ink && base && /^#[0-9a-f]{6}$/i.test(base) && contrast(m.brand.bg, base) < 1.7) {
@@ -659,6 +737,13 @@ function drawButton(ctx, btn, base) {
     ink = [m.brand.ink, m.brand.bg, '#ffffff', '#111111'].find((c) => contrast(fill, c) >= 3) || '#ffffff';
   }
   const rad = (m.bh / 2) * (typeof m.radius === 'number' ? m.radius : 1);
+  return { fill, ink, rad, stroke: m.stroke, sw: m.sw };
+}
+
+function drawButton(ctx, btn, base) {
+  const { m, rect } = btn;
+  if (m.lux) { paintLux(ctx, rect.x, rect.y, m.bw, m.bh, m, base); return; }
+  const { fill, ink, rad } = buttonPaint(btn, base);
   ctx.save();
   if (m.stroke) {
     roundRect(ctx, rect.x - m.sw, rect.y - m.sw, m.bw + m.sw * 2, m.bh + m.sw * 2, rad ? rad + m.sw : 0);
@@ -1416,7 +1501,7 @@ function smooth(ctx) {
 /* v3.13 · hooks the app sets: `frame` may draw a whole frame itself (a transition between
    two sections) by calling back into renderFrame; `afterBackground` draws over the
    background and its wash, under media, text and badges (the overlay track). */
-export const renderHooks = { frame: null, afterBackground: null, afterAll: null, drawingProgress: null };
+export const renderHooks = { frame: null, afterBackground: null, afterAll: null, drawingProgress: null, fault: null };
 export function render(ctx, W, H, state, opts = {}) {
   if (renderHooks.frame) {
     const L = renderHooks.frame(ctx, W, H, state, opts, renderFrame);
@@ -1431,7 +1516,14 @@ export function renderFrame(ctx, W, H, state, opts = {}) {
 
   ctx.save();
   ctx.clearRect(0, 0, W, H);
-  paintBackdrop(ctx, W, H, bd);
+  // v4 · a background that fails to paint (a broken clip, a picture still loading) never
+  // takes the frame down with it: the brand's base colour stands in and the app is told.
+  try { paintBackdrop(ctx, W, H, bd); }
+  catch (e) {
+    ctx.fillStyle = (bd && bd.base) || '#3b003a';
+    ctx.fillRect(0, 0, W, H);
+    if (renderHooks.fault) renderHooks.fault(e, 'background');
+  }
   ctx.restore();
 
   // the Dim wash works on every background — pattern, artwork, colour or upload
@@ -1477,21 +1569,37 @@ export function renderFrame(ctx, W, H, state, opts = {}) {
   if (renderHooks.afterAll) renderHooks.afterAll(ctx, W, H, state, opts);
 
   L.badgePart = opts.badgePart || null;
-  if (opts.selected && !opts.handles) drawSelection(ctx, L, opts.selected, opts.px, opts.accent, opts.note);
-  if (!opts.handles) for (const m of opts.multi || []) if (m !== opts.selected) drawSelection(ctx, L, m, opts.px, opts.accent);
+  // v4 · the selection stays visible while hovering; only a drag in progress hides it
+  const hideSel = !!opts.dragNow || (opts.handles && opts.dragNow === undefined);
+  if (opts.selected && !hideSel) drawSelection(ctx, L, opts.selected, opts.px, opts.accent, opts.note);
+  if (!hideSel) for (const m of opts.multi || []) if (m !== opts.selected) drawSelection(ctx, L, m, opts.px, opts.accent);
 
   if (opts.handles) {
     ctx.save();
     ctx.setLineDash([10, 8]);
-    ctx.lineWidth = Math.max(2, W / 600);
-    ctx.strokeStyle = 'rgba(255,142,255,0.9)';
-    if (L.ins.image) ctx.strokeRect(L.insRect.x, L.insRect.y, L.ins.w, L.ins.h);
-    if (L.wm.image) ctx.strokeRect(L.wmRect.x, L.wmRect.y, L.wmRect.w, L.wmRect.h);
-    if (!L.tx.empty) ctx.strokeRect(L.txRect.x, L.txRect.y, L.txRect.w, L.tx.h);
-    for (const x of L.extras || []) ctx.strokeRect(x.txRect.x, x.txRect.y, x.txRect.w, x.tx.h);
-    for (const b of L.buttons || []) ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
-    for (const m of L.media || []) ctx.strokeRect(m.insRect.x, m.insRect.y, m.ins.w, m.ins.h);
-    for (const b of L.xbadges || []) ctx.strokeRect(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+    const lw = Math.max(2, W / 600);
+    // v4 · a dark twin under the pink, so the outlines read on light patterns too
+    const all = (stroke) => {
+      if (L.ins.image) stroke(L.insRect.x, L.insRect.y, L.ins.w, L.ins.h);
+      if (L.wm.image) stroke(L.wmRect.x, L.wmRect.y, L.wmRect.w, L.wmRect.h);
+      if (!L.tx.empty) stroke(L.txRect.x, L.txRect.y, L.txRect.w, L.tx.h);
+      for (const x of L.extras || []) stroke(x.txRect.x, x.txRect.y, x.txRect.w, x.tx.h);
+      for (const b of L.buttons || []) stroke(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+      for (const m of L.media || []) stroke(m.insRect.x, m.insRect.y, m.ins.w, m.ins.h);
+      for (const b of L.xbadges || []) stroke(b.rect.x, b.rect.y, b.rect.w, b.rect.h);
+    };
+    ctx.lineWidth = lw * 2; ctx.strokeStyle = 'rgba(20,0,20,0.35)'; all((x, y, w, h) => ctx.strokeRect(x, y, w, h));
+    ctx.lineWidth = lw; ctx.strokeStyle = 'rgba(255,142,255,0.9)'; all((x, y, w, h) => ctx.strokeRect(x, y, w, h));
+    ctx.restore();
+  }
+  // v4 · the item under the pointer: a solid, clearly brighter outline (editor only)
+  if (opts.hoverRect && !opts.dragNow) {
+    const r = opts.hoverRect, u = opts.px || 1, o = 4 * u;
+    ctx.save();
+    ctx.lineWidth = 4 * u; ctx.strokeStyle = 'rgba(20,0,20,0.45)';
+    roundRect(ctx, r.x - o, r.y - o, r.w + o * 2, r.h + o * 2, 8 * u); ctx.stroke();
+    ctx.lineWidth = 2 * u; ctx.strokeStyle = '#ffffff';   // white: the selection keeps the section's colour
+    roundRect(ctx, r.x - o, r.y - o, r.w + o * 2, r.h + o * 2, 8 * u); ctx.stroke();
     ctx.restore();
   }
 
@@ -1517,6 +1625,15 @@ export function itemsOf(ctx, state, W, H) {
   (L.xbadges || []).forEach((b, k) => out.push({ id: `eb:${b.id}`, kind: 'badge', label: `Badge ${k + (L.wm.image ? 2 : 1)}` }));
   (L.drawings || []).forEach((d, k) => out.push({ id: `dr:${d.id}`, kind: 'drawing', label: `Drawing ${k + 1}` }));
   return out;
+}
+
+/** The bold CTA's type colours on this section's ground (as drawCta is given them). */
+export function ctaInk(state) {
+  const bd = byId(state.backdrop);
+  const BARE = bareStyles();
+  const dimmed = state.overlay && state.overlay.style !== 'none' && state.overlay.strength >= 0.35;
+  const ground = dimmed ? 'dark' : (bd.tone || 'dark');
+  return ground === 'dark' ? BARE.onDark : BARE.onLight;
 }
 
 /** Draws only `id` (an id from itemsOf) on a cleared frame. */

@@ -1,0 +1,17 @@
+{
+  "name": "mbk-deck",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Media Brand Kit slides from the command line: validate, storyboard, layout, numbered PNGs and editable PPTX — rendered by the app itself in headless Chromium.",
+  "type": "module",
+  "bin": { "mbk-deck": "./mbk-deck.mjs" },
+  "scripts": {
+    "validate": "node mbk-deck.mjs validate",
+    "sample": "node mbk-deck.mjs all samples/ask-ruth.md -o samples/out --fonts-dir ../../../tests/fontpkg/node_modules/@fontsource"
+  },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "playwright-core": "1.56.0"
+  }
+}

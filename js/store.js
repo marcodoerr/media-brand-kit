@@ -18,7 +18,7 @@ const STORE = 'uploads';
 const MAX_EDGE = 3000;
 
 /** Clips are stored as uploaded; this is the ceiling before we refuse one. */
-export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 300 * 1024 * 1024;
 
 let dbPromise = null;
 
