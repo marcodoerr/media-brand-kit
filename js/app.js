@@ -11505,9 +11505,18 @@ function renderOverlayGroup() {
   const body = $('#ov-body');
   if (!body) return;
   const sel = String(selected || '');
-  const o = sel.startsWith('ov:') && overlayById(sel.slice(3));
+  const oid = sel.startsWith('ov:') ? sel.slice(3) : null;
   body.innerHTML = '';
-  if (!o) return;
+  if (!oid || !overlayById(oid)) return;
+  // Undo / Redo put a fresh copy of the clip in the state: the panel's controls always read and
+  // write the clip as it is NOW (by id), never the copy this panel was built from (an edit after
+  // an Undo used to land on the old copy and was lost)
+  const o = new Proxy({}, {
+    get: (_, key) => { const c = overlayById(oid); return c ? c[key] : undefined; },
+    set: (_, key, v) => { const c = overlayById(oid); if (c) c[key] = v; return true; },
+    deleteProperty: (_, key) => { const c = overlayById(oid); if (c) delete c[key]; return true; },
+    has: (_, key) => { const c = overlayById(oid); return !!c && key in c; },
+  });
   const k = ovKind(o);
   $('#ov-title').textContent = `Overlay · ${OV_KIND_NAME[k]}`;
   let pushed = false;

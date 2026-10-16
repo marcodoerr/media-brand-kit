@@ -1110,3 +1110,23 @@ Regression:
   - its own Deploy Preview
   - features behind flags
   - an audit of brand assets and agent infrastructure, and a check of AI API access and costs, before any integration
+
+## 51. Before going live (2026-10-15)
+
+Checked on PR #2 (f96f7ad, the preview link Marco approved). The full suite `s208`–`s238` plus protect.py ran. Fixed before merging to `main`:
+
+- **Bug: overlay panel edits lost after Undo.**
+  - Steps: move a clip, Undo, then change it in the panel (for example Full frame → Window). The change went nowhere: Undo puts a fresh copy of the clip in the state, and the panel kept writing to the copy it was built from.
+  - `renderOverlayGroup()` now reads and writes the clip through its id (a Proxy over `overlayById(oid)`).
+  - Found by `s210`, which now passes 22/22.
+- **Phones under 430 px.** At 390 / 375 / 360 px:
+  - the top bar's "9:16" ran under the Appearance button
+  - the second row pushed Light / dark off the right edge
+  - Fix, at ≤ 400 px: the brand shows as its mark (the mark still opens the brand list), and the second row's round buttons are 36 px with 4 px gaps.
+  - Fix, at ≤ 370 px: 34 px buttons, and the section count (1 / 3) is hidden.
+  - Nothing is off-screen at 430 / 390 / 375 / 360.
+- **Tests.**
+  - `s208` now checks the current phone order (+ · Undo · Redo · Preview · Light / dark) and that nothing is off-screen.
+  - `tests/photo.png` (s231's picture) is committed; it had been ignored by `*.png`.
+  - Results: every test passes except `s213`'s phone tap, which flaked once and then passed 30/30 twice.
+

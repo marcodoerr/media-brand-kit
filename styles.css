@@ -3814,3 +3814,21 @@ html[data-ff~="presentation"][data-content="carousel"] #deck-btn { display: flex
 @media (max-width: 820px) {
   .deck-pop { top: auto; bottom: 0; left: 0; right: 0; transform: none; width: auto; max-height: 92dvh; border-radius: 22px 22px 0 0; }
 }
+
+/* ===== Release 1 · phones narrower than 430 px (most iPhones are 375–393): nothing off-screen =====
+   The top bar showed the brand's name and ran into the Appearance button ("9:16" under the drop);
+   the second row pushed Light / dark past the right edge. Under 401 px the brand is its mark (the
+   whole mark still opens the brand list) and the second row's round buttons close up a little. */
+@media (max-width: 400px) {
+  .topbar .brand-area .brand-text { display: none; }
+  .topbar .brand-mark { display: block; width: 30px; height: 30px; }
+  .topbar .brand-area { padding: 4px; margin-left: 0; }
+  html.is-fs .fs-actions { gap: 4px; }
+  .fs-actions > #fs-surface { margin-left: 4px; }
+  .fs-actions > .fs-add-section { margin-right: 0; }
+  .fs-actions > .fs-btn { width: 36px; height: 36px; min-width: 36px; }
+}
+@media (max-width: 370px) {
+  .fs-scope .fs-count { display: none; }
+  .fs-actions > .fs-btn { width: 34px; height: 34px; min-width: 34px; }
+}
