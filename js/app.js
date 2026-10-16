@@ -10873,7 +10873,7 @@ function syncPanelTop() {
   done.hidden = !t;
 }
 
-/** View settings: Safe area and Grid, with Full screen (desktop) — the same switches everywhere. */
+/** View settings: Safe area and Grid — the same switches everywhere (Full screen is its own button). */
 function viewToggle(id, on) {
   const el = $(id);
   if (!el || el.checked === on) return;
@@ -10883,8 +10883,7 @@ function viewToggle(id, on) {
 function viewItems() {
   const guides = !!state.guides, grid = !!state.grid;
   return [
-    // v3.21: in full screen the × in the bar closes it — no Exit full screen here
-    ...(fsMode ? [] : [{ icon: 'expand', label: 'Full screen', sub: 'The canvas large, the same editing', run: () => setFsMode('edit') }, { sep: true }]),
+    // v4.7: no Full screen here — the ⤢ button beside this one already does it (Marco, 2026-10-16)
     { icon: 'safe', label: `Safe area · ${guides ? 'On' : 'Off'}`, sub: 'Where platform buttons and captions stay clear', run: () => { viewToggle('#tg-guides', !guides); reopenView(); } },
     { icon: 'grid', label: `Grid · ${grid ? 'On' : 'Off'}`, sub: 'Centre lines, thirds, columns — dragging snaps', run: () => { viewToggle('#tg-grid', !grid); reopenView(); } },
     ...(state.format === '9x16' ? [{ icon: 'safe', label: `Safe area for · ${SAFE_TARGETS[state.safeFor || 'all'].label}`, sub: 'Where it will be posted', more: true, run: () => openSafeForMenu(viewAnchor) }] : []),

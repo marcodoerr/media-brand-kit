@@ -1165,3 +1165,7 @@ Checked on PR #2 (f96f7ad, the preview link Marco approved). The full suite `s20
     - `s236`'s MoshPit "design not changed" check fails on `main` too, so this change didn't cause it.
   - Protected 39/39.
 
+
+## §54 · View (grid) menu: no Full screen item (v4.7, 2026-10-16)
+
+Marco: "full screen appears twice. remove it from the grid menu". The View menu (`viewItems()` in js/app.js) no longer lists Full screen; the ⤢ button (`#fs-open`) beside the View button is the one way in, and it is always shown outside full screen. The menu now holds Safe area, Grid and (9:16) Safe area for. Test: tests/s241.py (8/8). Rechecked s217, s226, s229, s230, s239 — all pass; protect 39/39.
