@@ -1130,3 +1130,12 @@ Checked on PR #2 (f96f7ad, the preview link Marco approved). The full suite `s20
   - `tests/photo.png` (s231's picture) is committed; it had been ignored by `*.png`.
   - Results: every test passes except `s213`'s phone tap, which flaked once and then passed 30/30 twice.
 
+## 52. Fix: full screen, a finger tap on a button or the background (2026-10-15)
+
+- **Bug:** on a phone, tapping a button or the empty canvas in full screen didn't open its edit sheet. A mouse click and finger taps on text or badges did. It was already in v3.25.
+- **Cause:** the tap opens the sheet on pointerup. The canvas shrinks and the timeline slides up under the finger. The browser's follow-up `click` for a touch is aimed at whatever is under the finger by then (the timeline), and a click outside the canvas closes the sheet.
+- **Fix:** the full-screen tap handler calls `swallowFollowingClick()` for non-mouse taps. It eats that one click (capture phase, within 500 ms).
+- **Tests:**
+  - New `s239`: desktop mouse, phone finger and phone mouse, tapping badge / text / button / background. It passes 16/16; v3.25 gets 14/16.
+  - `s208`, `s213`, `s216`, `s217`, `s226`–`s233` pass, and protect.py passes.
+
