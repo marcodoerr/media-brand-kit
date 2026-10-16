@@ -3832,3 +3832,27 @@ html[data-ff~="presentation"][data-content="carousel"] #deck-btn { display: flex
   .fs-scope .fs-count { display: none; }
   .fs-actions > .fs-btn { width: 34px; height: 34px; min-width: 34px; }
 }
+
+/* ===== 2026-10-16 · Badge: [ Upper ] [ Lower ] [ Surface ] ===== */
+#badge-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+#badge-controls > #bp-surface:not([hidden]) { display: contents; }
+#bp-surface > .bp-head {
+  grid-row: 1; grid-column: 3; margin: 2px 0 6px; padding: 8px 10px; min-height: 44px;
+  border: 1px solid var(--line); border-radius: 12px; font-weight: 600;
+}
+#bp-surface > .bp-head .switch-sub { display: none; }   /* the pill says "Surface"; the panel below says the rest */
+#bp-upper[hidden] ~ #bp-surface > .bp-head { grid-column: 2; }
+#bp-surface > .bp-head:has(input:checked) { border-color: var(--active); background: var(--active-tint); }
+#bp-surface.is-active > .bp-head { box-shadow: inset 0 0 0 1px var(--cat, var(--active)); }
+#bp-surface > .bp-body { grid-row: 5; grid-column: 1 / -1; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+/* three pills share the row: each is a toggle button — filled with a ✓ when on — instead of carrying a
+   switch inside (three switches + labels didn't fit the panel at its narrowest) */
+#bp-upper > .bp-head, #bp-lower > .bp-head, #bp-surface > .bp-head { padding: 8px 6px; gap: 0; font-size: 13px; justify-content: center; text-align: center; cursor: pointer; }
+#bp-upper > .bp-head .track, #bp-lower > .bp-head .track, #bp-surface > .bp-head .track { display: none; }
+#bp-upper > .bp-head > span:last-child::before, #bp-lower > .bp-head > span:last-child::before, #bp-surface > .bp-head > span:last-child::before {
+  content: ""; display: inline-block; width: 0; margin-right: 0; transition: width .12s ease;
+}
+#bp-upper > .bp-head:has(input:checked) > span:last-child::before, #bp-lower > .bp-head:has(input:checked) > span:last-child::before, #bp-surface > .bp-head:has(input:checked) > span:last-child::before {
+  content: "✓"; width: auto; margin-right: 6px; font-weight: 700; color: var(--active);
+}
+#bp-upper > .bp-head:has(input:focus-visible), #bp-lower > .bp-head:has(input:focus-visible), #bp-surface > .bp-head:has(input:focus-visible) { outline: 2px solid var(--focus, var(--active)); outline-offset: 2px; }

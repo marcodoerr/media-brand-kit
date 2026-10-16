@@ -1139,3 +1139,29 @@ Checked on PR #2 (f96f7ad, the preview link Marco approved). The full suite `s20
   - New `s239`: desktop mouse, phone finger and phone mouse, tapping badge / text / button / background. It passes 16/16; v3.25 gets 14/16.
   - `s208`, `s213`, `s216`, `s217`, `s226`–`s233` pass, and protect.py passes.
 
+## 53. Badge surface; no "Open now" on Home (2026-10-16)
+
+- **Home:** the open design's card no longer carries the "Open now" label. Its aria-label still says "open now".
+- **Badge surface.** This is a background, and optionally a stroke, behind the whole badge: upper, image and lower together. Every badge has its own; the main badge and each added one are separate.
+  - **Data:**
+    - main badge: `state.badgeSurface`, a SCENE_STYLE key, also in DESIGN_KEYS and the show-on keys; null means none
+    - added badge: `b.surface`
+    - shape: `SURFACE_DEFAULT() = { on, fill, stroke, strokeOn, strokeW, pad }`
+    - `fill` / `stroke` null means the brand's colours: `surfaceColours()` gives the button ink as the ground and the button colour as the stroke
+    - `fill: 'none'` means stroke only
+  - **Render** (`badgeComposition`): the surface is the union of the parts that show, plus `pad` (7 % of the badge width × Padding). Turning a part off or on makes it shorter or taller.
+    - Radius is min(pad × 1.6, half the height). The stroke is drawn outward, `strokeW` px at 1080 (max 16).
+    - `rect` includes the surface, so selection, dragging, hit tests and the frame clamp use it.
+    - `offY` still measures from the parts.
+    - `drawBadge` paints the surface first.
+  - **Panel:** `surfaceControls(get, label, pick, done, peek)` builds the same block for the main badge (`#bp-surface`, after `#bp-lower`) and each added badge. It has Background (None + brand swatches), Stroke (colour, width), Padding and *Reset to brand colors*.
+    - Edits are one Undo step each; a slider drag is one step.
+    - Reads go through `peek()` and never write, so opening the panel doesn't count as a change.
+  - **Main badge row:** it is now **[ Upper ] [ Lower ] [ Surface ]**, three toggle pills. Each fills in and shows a ✓ when on; the switch inside each pill is gone because three didn't fit at 1180 px.
+- **Tests:**
+  - New `s240` passes 18/18: Home label; surface off by default; it wraps all parts; it shrinks when the upper part is off and grows with the lower one; background, stroke and width; pixels on the canvas; Undo; kept after reload; an added badge's own surface; the phone sheet.
+  - The full suite passes, apart from two failures:
+    - `s211` flaked once and passes on rerun.
+    - `s236`'s MoshPit "design not changed" check fails on `main` too, so this change didn't cause it.
+  - Protected 39/39.
+

@@ -770,6 +770,17 @@ function drawButton(ctx, btn, base) {
 export const LOWER_DEFAULT = () => ({ on: false, text: null, ink: null, fill: null, stroke: null, strokeOn: false, strokeW: 3, scale: 1 });
 export const LOWER_STROKE_MAX = 12;   // px at 1080 — thicker starts to swallow the box
 
+/* 2026-10-16 · A surface behind the whole badge — upper, image and lower together — with its own
+   background and stroke. It is sized from the parts that show, so turning the upper badge off
+   (or the lower one on) makes it shorter (or taller). `pad` scales the room around the parts. */
+export const SURFACE_DEFAULT = () => ({ on: false, fill: null, stroke: null, strokeOn: false, strokeW: 3, pad: 1 });
+export const SURFACE_STROKE_MAX = 16;
+/** The surface's colours in effect: its own, or the brand's (the button's ink as the ground, its colour as the stroke). */
+export function surfaceColours(su) {
+  const brand = ctaOf().button;
+  return { fill: su.fill == null ? brand.ink : su.fill, stroke: su.stroke == null ? brand.bg : su.stroke };
+}
+
 /** The lower badge's colours in effect: its own, or the brand's button colours. */
 export function lowerColours(lo) {
   const brand = ctaOf().button;
@@ -904,6 +915,7 @@ export function badgeStateOf(state, b) {
     badgeLower: { ...LOWER_DEFAULT(), ...(b.lower || {}) },
     badgeMiddle: b.middle || null,
     badgeShape: b.shape === 'bubble' ? 'bubble' : 'round', badgeHalo: b.halo || null,   // v3.1: each badge its own
+    badgeSurface: b.surface || null,
   };
 }
 
@@ -935,13 +947,25 @@ function badgeComposition(ctx, state, wm, wmPos, W, H, S) {
   }
   const list = Object.values(parts);
   if (!list.length) return { full, lt, low, up, parts, rect: null, offY: 0 };
-  const x0 = Math.min(...list.map((r) => r.x)), y0 = Math.min(...list.map((r) => r.y));
-  const x1 = Math.max(...list.map((r) => r.x + r.w)), y1 = Math.max(...list.map((r) => r.y + r.h));
+  let x0 = Math.min(...list.map((r) => r.x)), y0 = Math.min(...list.map((r) => r.y));
+  let x1 = Math.max(...list.map((r) => r.x + r.w)), y1 = Math.max(...list.map((r) => r.y + r.h));
+  const top0 = y0;
+  // the surface: the parts that show, with room round them (it grows and shrinks with them)
+  const su = { ...SURFACE_DEFAULT(), ...(state.badgeSurface || {}) };
+  let surface = null;
+  if (su.on) {
+    const pad = full.w * 0.07 * Math.max(0.3, Math.min(2.5, Number(su.pad) || 1));
+    x0 -= pad; y0 -= pad; x1 += pad; y1 += pad;
+    const c = surfaceColours(su);
+    const sw = su.strokeOn ? Math.max(0, Math.min(SURFACE_STROKE_MAX, Number(su.strokeW) || 0)) * S : 0;
+    surface = { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: Math.min(pad * 1.6, (y1 - y0) / 2), fill: c.fill, stroke: c.stroke, sw };
+  }
   const rect = clampRect({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, W, H);
   const dx = rect.x - x0, dy = rect.y - y0;
   for (const r of list) { r.x += dx; r.y += dy; }
+  if (surface) { surface.x += dx; surface.y += dy; }
   // where the image (the full lockup's frame) sits after the clamp, for drawing
-  return { full, lt, low, up, parts, rect, offY: y0 - Y0, frame: { x: X0 + dx, y: Y0 + dy } };
+  return { full, lt, low, up, parts, rect, surface, offY: top0 - Y0, frame: { x: X0 + dx, y: Y0 + dy } };
 }
 
 function drawBadge(ctx, L) {
@@ -949,6 +973,24 @@ function drawBadge(ctx, L) {
   if (!b || !b.rect) return;
   const { full, lt, parts, low, up, frame } = b;
   const img = full.image;
+  if (b.surface) {
+    // the surface first: everything else sits on it
+    const s0 = b.surface;
+    ctx.save();
+    if (s0.fill !== 'none') {
+      roundRect(ctx, s0.x, s0.y, s0.w, s0.h, s0.r);
+      ctx.fillStyle = s0.fill;
+      ctx.fill();
+    }
+    if (s0.sw > 0) {
+      const i = s0.sw / 2;   // drawn outward, like the lower badge's stroke
+      roundRect(ctx, s0.x - i, s0.y - i, s0.w + s0.sw, s0.h + s0.sw, s0.r + i);
+      ctx.lineWidth = s0.sw;
+      ctx.strokeStyle = s0.stroke;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   if (parts.upper && up) {
     // your own words, set in the artwork's pill
     const r = parts.upper;

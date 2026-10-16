@@ -11,7 +11,7 @@ import {
   gradId, GRAD_DIRS, colourLuminance, COGENT_DEFAULTS, setAdjustLookup,
 } from './backdrops.js';
 import { buttonPaint, baseTypeSizes, unitOf, ctaInk } from './render.js';
-import { render, renderHooks, layout, safeArea, gridLines, FORMATS, SAFE_TARGETS, setSafeTarget, paintStroke, drawingPoint, strokeWidth, h1ScaleOf, bodyScaleOf, textLook, itemsOf, renderItem, badgeScaleMax, LOWER_DEFAULT, LOWER_STROKE_MAX, lowerColours, UPPER_DEFAULT_TEXT, BADGE_ITEM, MIDDLE_DEFAULT, middleColours, textBadgeImage } from './render.js';
+import { render, renderHooks, layout, safeArea, gridLines, FORMATS, SAFE_TARGETS, setSafeTarget, paintStroke, drawingPoint, strokeWidth, h1ScaleOf, bodyScaleOf, textLook, itemsOf, renderItem, badgeScaleMax, LOWER_DEFAULT, LOWER_STROKE_MAX, lowerColours, SURFACE_DEFAULT, SURFACE_STROKE_MAX, surfaceColours, UPPER_DEFAULT_TEXT, BADGE_ITEM, MIDDLE_DEFAULT, middleColours, textBadgeImage } from './render.js';
 import { loadAssets, activeBrand, requestHi, onHiRes, hiReady, whenHiReady, C, img as assetImg } from './assets.js';
 import { BRANDS, DEFAULT_BRAND, RETIRED } from './brands.js';
 import { contrast } from './colours.js';
@@ -80,6 +80,7 @@ const state = {
   badgeShape: 'round',   // v3.1: a round portrait badge as a circle or a speech bubble (lower-left corner square)
   badgeHalo: null,       // v3.1: its outline { on, color } (render.js HALO_DEFAULT)
   badgeMiddle: null,     // a text badge's middle: its words (null = the brand name) and colours (render.js MIDDLE_DEFAULT)
+  badgeSurface: null,            // 2026-10-16: a surface behind the whole badge (render.js SURFACE_DEFAULT)
   badgeLower: LOWER_DEFAULT(),   // a text box under the badge: on, text (null = brand name), ink, fill ('none'), stroke, strokeOn, strokeW, scale
   previewSurface: 'studio',   // what the preview sits on — studio | light; never exported
   card: true,
@@ -133,6 +134,7 @@ function load() {
     state.badgePowered = saved.badgePowered !== false;
     state.badgeImage = saved.badgeImage !== false;
     state.badgeLower = { ...LOWER_DEFAULT(), ...(saved.badgeLower || {}) };
+    state.badgeSurface = saved.badgeSurface || null;
     state.badgeUpper = typeof saved.badgeUpper === 'string' ? saved.badgeUpper : null;
     delete state.scratchColour;   // "Start from scratch" was removed
     if (state.previewSurface !== 'light') state.previewSurface = 'studio';
@@ -672,7 +674,7 @@ const sceneName = (sc, i) => {
    while a section is edited, exactly like its card and extra blocks. */
 const SCENE_STYLE = ['textTone', 'card', 'textColors', 'cardColors', 'borders', 'buttons', 'media', 'badges', 'drawings',
   // …and its own badge, text switch, text sizes and layout: every section is fully its own
-  'badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeUpper', 'badgeMiddle', 'badgeShape', 'badgeHalo', 'visibility', 'textMode', 'h1Scale', 'bodyScale', 'pos', 'ctaBox'];
+  'badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeSurface', 'badgeUpper', 'badgeMiddle', 'badgeShape', 'badgeHalo', 'visibility', 'textMode', 'h1Scale', 'bodyScale', 'pos', 'ctaBox'];
 const CTA_LOOK = () => ({ ink: null, fill: null, stroke: null, strokeW: 0, radius: null, scale: 1 });
 
 /* Buttons used to be the CTA's header drawn as a pill. They are their own
@@ -837,6 +839,7 @@ function loadScene(i) {
   // sections saved before the badge had parts: the image on, no lower badge
   if (sc.badgeImage == null) state.badgeImage = true;
   if (sc.badgeLower == null) state.badgeLower = LOWER_DEFAULT();
+  if (sc.badgeSurface === undefined) state.badgeSurface = null;   // sections from before the surface: none
   if (sc.badgeUpper == null) state.badgeUpper = null;
   if (sc.badgeMiddle == null) state.badgeMiddle = null;
   if (sc.badgeShape == null) state.badgeShape = 'round';
@@ -5615,7 +5618,7 @@ function settle(goals, measure) {
 const LINK_LISTS = { bt: 'buttons', xb: 'blocks', md: 'media', eb: 'badges' };
 const OWN_LINKS = {
   watermark: {
-    keys: ['badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeUpper', 'badgeMiddle', 'badgeShape', 'badgeHalo'],
+    keys: ['badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeSurface', 'badgeUpper', 'badgeMiddle', 'badgeShape', 'badgeHalo'],
     pos: 'watermark', flag: 'badgeLinked',
     off: (sc) => { if (sc.badge && sc.badge !== 'none') sc.badgeLast = sc.badge; sc.badge = 'none'; },
   },
@@ -6175,7 +6178,7 @@ function homeTile(it, size = 'lg') {
     const im = document.createElement('img'); im.src = src; im.alt = ''; im.style.aspectRatio = `${f.w} / ${f.h}`; pic.append(im);
     if (lazy) fillThumbLater(im, it, lazy);
   } else { pic.classList.add('is-empty'); pic.append(brandMark(it.brand)); }
-  if (it.kind === 'current') { const live = document.createElement('span'); live.className = 'home-live'; live.textContent = 'Open now'; pic.append(live); }
+  // (the open design is no longer labelled "Open now" on its card — Marco, 2026-10-16)
   const name = document.createElement('span');
   name.className = 'home-name';
   name.textContent = it.name;
@@ -7120,7 +7123,7 @@ let badgePartsSig = '';
 function syncBadgeParts(force) {
   if (mainLowerGate) mainLowerGate.sync();
   const lo = lowerState();
-  const sig = JSON.stringify([state.brand, state.scene, state.badge, state.badgePowered, state.badgeImage, state.badgeUpper, state.badgeMiddle, lo, badgePart, selected === 'watermark']);
+  const sig = JSON.stringify([state.brand, state.scene, state.badge, state.badgePowered, state.badgeImage, state.badgeUpper, state.badgeMiddle, lo, state.badgeSurface, badgePart, selected === 'watermark']);
   if (!force && sig === badgePartsSig) return;
   badgePartsSig = sig;
   const set = badges();
@@ -7165,11 +7168,21 @@ function syncBadgeParts(force) {
   $('#lower-scale').value = k;
   $('#lower-scale-out').textContent = `${Math.round(k * 100)}%`;
   if (lo.on) for (const kind of ['ink', 'fill', 'stroke']) lowerRow(kind);
+  if (mainSurface && mainSurface.refresh) mainSurface.refresh();
   for (const el of document.querySelectorAll('.badge-part')) el.classList.toggle('is-active', selected === 'watermark' && el.dataset.bpart === badgePart);
 }
 
 let mainLowerGate = null;
+let mainSurface = null;
 function wireBadgeParts() {
+  {
+    // 2026-10-16: the main badge's surface, under its lower badge
+    mainSurface = surfaceControls(() => (state.badgeSurface = { ...SURFACE_DEFAULT(), ...(state.badgeSurface || {}) }), 'Badge',
+      () => { selected = 'watermark'; badgePart = 'surface'; }, () => { commitScene(); save(); },
+      () => ({ ...SURFACE_DEFAULT(), ...(state.badgeSurface || {}) }));
+    mainSurface.id = 'bp-surface';
+    $('#bp-lower').after(mainSurface);
+  }
   {
     // v3.12: the lower badge's colors and stroke sit behind Style: Brand · Custom
     mainLowerGate = styleGate('main-lower', 'Lower badge', () => lowerIsCustom(lowerState()), () => {
@@ -7669,7 +7682,7 @@ const MAX_TEMPLATES = 40;
 
 const DESIGN_KEYS = [
   'brand', 'backdrop', 'format', 'h1', 'body', 'scale', 'h1Scale', 'bodyScale', 'scenes', 'scene', 'sharedBg', 'sharedStill', 'sharedOverlay',
-  'visibility', 'textTone', 'badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeUpper', 'badgeMiddle', 'card', 'overlay',
+  'visibility', 'textTone', 'badge', 'badgeLast', 'badgeScale', 'badgePowered', 'badgeImage', 'badgeLower', 'badgeSurface', 'badgeUpper', 'badgeMiddle', 'card', 'overlay',
   'adjust', 'inset', 'video', 'pos', 'music', 'textColors', 'cardColors', 'contentType', 'blocks', 'textMode', 'borders', 'buttons', 'media', 'badges',
   'drawings', 'safeFor', 'badgeShape', 'badgeHalo', 'ctaBox', 'overlays', 'captions', 'deck',
 ];
@@ -10271,12 +10284,120 @@ function renderBadgeItems(force = true) {
     txt.dataset.bpart = 'upper';
     const parts = [head, showOnRow(`eb:${b.id}`), choice];
     if (isTextBadge(key)) parts.push(middleControls(() => ({ ...MIDDLE_DEFAULT(), ...(b.middle || {}) }), (patch) => { b.middle = { ...MIDDLE_DEFAULT(), ...(b.middle || {}), ...patch }; }, `Badge ${n}`, pick, done));
-    row.append(...parts, scale, up, txt, lowerControls(b, n, pick, done));
+    row.append(...parts, scale, up, txt, lowerControls(b, n, pick, done),
+      surfaceControls(() => (b.surface = { ...SURFACE_DEFAULT(), ...(b.surface || {}) }), `Badge ${n}`, pick, done, () => ({ ...SURFACE_DEFAULT(), ...(b.surface || {}) })));
     host.append(row);
   });
 }
 
 /** An extra badge's lower badge: the same controls as the first badge's. */
+/* 2026-10-16 · Surface: a background (and stroke) behind the whole badge — upper, image and
+   lower together. Built the same for the main badge and every added one; render.js sizes it
+   from the parts that show. `get` returns the settings object (created on first use). */
+function surfaceControls(get, label, pick, done, peek = get) {
+  const wrap = document.createElement('div');
+  wrap.className = 'badge-part badge-surface';
+  wrap.dataset.bpart = 'surface';
+  const sw = document.createElement('label');
+  sw.className = 'switch switch-row bp-head';
+  sw.innerHTML = `<input type="checkbox" ${peek().on ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span>Surface <small class="switch-sub">A background behind the whole badge</small></span>`;
+  const on = sw.querySelector('input');
+  on.setAttribute('aria-label', `${label} surface`);
+  const body = document.createElement('div');
+  body.className = 'bp-body';
+  body.hidden = !peek().on;
+  const rows = {};
+  const colourRow = (kind, text) => {
+    const line = document.createElement('div');
+    line.className = 'swatch-line lower-row';
+    line.setAttribute('role', 'radiogroup');
+    line.setAttribute('aria-label', `${label} surface ${text.toLowerCase()}`);
+    line.innerHTML = `<span class="swatch-lbl">${text}</span><span class="swatches"></span>`;
+    rows[kind] = line.querySelector('.swatches');
+    return line;
+  };
+  // every change: the Undo point first, then the change (a slider drag is one Undo)
+  let pushed = false;
+  const edit = (fn, live) => {
+    if (!pushed) { pushUndo(`${label} surface`); pushed = true; }
+    fn();
+    pick(); draw();
+    if (!live) { pushed = false; done(); }
+  };
+  let paintSig = '';
+  const paint = () => {
+    const now = surfaceColours(peek());
+    // only rebuild the chips when their colours changed (a rebuild under a tap would eat the tap)
+    const sig = JSON.stringify([now, brandSwatches()]);
+    if (sig === paintSig) return;
+    paintSig = sig;
+    for (const kind of ['fill', 'stroke']) {
+      const host = rows[kind];
+      host.innerHTML = '';
+      const current = String(now[kind]).toLowerCase();
+      const chip = (value, name, cls) => {
+        const c = document.createElement('button');
+        c.type = 'button';
+        c.className = `sw ${cls}`;
+        c.setAttribute('role', 'radio');
+        c.setAttribute('aria-checked', String(String(value).toLowerCase() === current));
+        c.setAttribute('aria-label', name);
+        c.title = name;
+        if (cls.includes('sw-colour')) c.style.setProperty('--sw', value);
+        c.addEventListener('click', (e) => {
+          e.stopPropagation();
+          edit(() => {
+            const fix = surfaceColours(get());          // one colour never moves the other
+            Object.assign(get(), { fill: fix.fill, stroke: fix.stroke, [kind]: value });
+            if (kind === 'stroke') get().strokeOn = true;
+          }, false);
+          paint();
+        });
+        host.append(c);
+      };
+      if (kind === 'fill') chip('none', 'None (transparent)', 'sw-none');
+      for (const { name, hex } of brandSwatches()) chip(hex, name, 'sw-colour');
+    }
+  };
+  const slider = (text, min, max, step, val, set, fmt) => {
+    const r = document.createElement('label');
+    r.className = 'slider-row';
+    r.innerHTML = `<span>${text}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${val()}" aria-label="${label} surface ${text.toLowerCase()}"><output>${fmt(val())}</output>`;
+    const i = r.querySelector('input'), o = r.querySelector('output');
+    i.addEventListener('input', () => { edit(() => set(Number(i.value)), true); o.textContent = fmt(Number(i.value)); });
+    i.addEventListener('change', () => edit(() => {}, false));
+    return r;
+  };
+  const strokeSw = document.createElement('label');
+  strokeSw.className = 'switch switch-row';
+  strokeSw.innerHTML = `<input type="checkbox" ${peek().strokeOn ? 'checked' : ''}><span class="track" aria-hidden="true"></span><span>Stroke</span>`;
+  const strokeOn = strokeSw.querySelector('input');
+  const strokeBody = document.createElement('div');
+  strokeBody.hidden = !peek().strokeOn;
+  strokeBody.append(colourRow('stroke', 'Color'),
+    slider('Width', 1, SURFACE_STROKE_MAX, 1, () => Math.max(1, Math.min(SURFACE_STROKE_MAX, Number(peek().strokeW) || 3)), (v) => { get().strokeW = Math.round(v); get().strokeOn = true; }, (v) => `${Math.round(v)} px`));
+  strokeOn.addEventListener('change', () => { edit(() => { get().strokeOn = strokeOn.checked; }, false); strokeBody.hidden = !strokeOn.checked; });
+  const room = slider('Padding', 0.3, 2.5, 0.05, () => Number(peek().pad) || 1, (v) => { get().pad = Math.round(v * 100) / 100; }, (v) => `${Math.round(v * 100)}%`);
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'link-btn text-reset';
+  reset.textContent = 'Reset to brand colors';
+  reset.addEventListener('click', () => { edit(() => Object.assign(get(), { fill: null, stroke: null, strokeOn: false, strokeW: 3, pad: 1 }), false); strokeOn.checked = false; strokeBody.hidden = true; paint(); });
+  body.append(colourRow('fill', 'Background'), strokeSw, strokeBody, room, reset);
+  paint();
+  on.addEventListener('change', () => { edit(() => { get().on = on.checked; }, false); body.hidden = !on.checked; });
+  wrap.append(sw, body);
+  wrap.refresh = () => {
+    const now = peek();
+    on.checked = !!now.on; body.hidden = !now.on; strokeOn.checked = !!now.strokeOn; strokeBody.hidden = !now.strokeOn;
+    for (const i of body.querySelectorAll('input[type=range]')) {
+      const isW = /width/i.test(i.getAttribute('aria-label')), v = isW ? Math.max(1, Math.min(SURFACE_STROKE_MAX, Number(now.strokeW) || 3)) : Number(now.pad) || 1;
+      if (document.activeElement !== i) { i.value = v; i.nextElementSibling.textContent = isW ? `${Math.round(v)} px` : `${Math.round(v * 100)}%`; }
+    }
+    paint();
+  };
+  return wrap;
+}
 function lowerControls(b, n, pick, done) {
   const lo = () => (b.lower = { ...LOWER_DEFAULT(), ...(b.lower || {}) });
   const brandName = (activeBrand() && activeBrand().name) || '';
